@@ -66,7 +66,8 @@ objective.py  ── строит то, что видит оптимизатор
         │        grad  = ∇f(x) [/f_max если norm]   (шум только в value)
         ▼
 experiment.py ── для каждой ячейки (function, scale, data, algorithm) гоняет по всем seeds:
-        │          algorithm ∈ {random, tpe, tpe_gradw, tpe_gp, tpe_gradw_gp, optuna}
+        │          algorithm ∈ {random, tpe, tpe_w_smooth/smooth_inv/sign/sign_inv,
+        │                        tpe_refine, tpe_gp, tpe_gp_w, tpe_gp_refine, optuna}
         ▼
 tpe.py / baselines.py ── возвращают x_history, y_history (наблюдаемые)
         ▼
@@ -124,7 +125,7 @@ fin_5), используя оракул ∇f, без доп. оценок object
 5. **Детерминизм:** `PYTHONHASHSEED=0` + фиксированные seeds + фиксированный seed оценки f_max.
 
 ## 7. Что считать ablation, а что нет
-- `tpe` vs `tpe_gradw` / `tpe_gp` / `tpe_gradw_gp` — корректные ablation (один фактор).
+- `tpe` vs `tpe_w_*` / `tpe_gp` / `tpe_refine` — корректные ablation (один фактор).
 - `tpe@raw` vs `tpe@norm` — корректный ablation нормализации.
 - `optuna`, `random` — внешний контекст, не ablation (другие реализации).
 

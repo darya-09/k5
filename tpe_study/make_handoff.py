@@ -33,8 +33,13 @@ def main():
     rob = pd.read_csv(T / "significance_robust_summary.csv") if (T / "significance_robust_summary.csv").exists() else None
     ps = pd.read_csv(T / "per_seed_final.csv")
 
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "src"))
+    from tpe_study.experiment import ALGO_FAMILY
     avg = (d.groupby("algorithm")[["success_rate_%", "final_dist_y_mean", "final_dist_x_mean"]]
            .mean().round(3).reset_index())
+    avg["family"] = avg["algorithm"].map(ALGO_FAMILY)
+    avg = avg.sort_values("success_rate_%", ascending=False)
     win = (abl.groupby("algorithm")["better_than_tpe"].mean().mul(100).round(1)
            .reset_index().rename(columns={"better_than_tpe": "win_rate_vs_tpe_%"})
            .sort_values("win_rate_vs_tpe_%", ascending=False))
@@ -62,8 +67,15 @@ def main():
     L.append("  - `tpe_w_smooth_inv` (−tanh) — больше вес МАЛОМУ ‖∇f‖;")
     L.append("  - `tpe_w_sign` (резкая сигмоида) — большому ‖∇f‖;")
     L.append("  - `tpe_w_sign_inv` — малому ‖∇f‖.")
-    L.append("- **GP-переранжирование** кандидатов: `tpe_gp`; **GP + вес** (аналог gTPE): `tpe_gp_w`.")
+    L.append("- **GP-переранжирование** кандидатов: `tpe_gp`; **GP + вес наблюдений** (аналог gTPE): `tpe_gp_w`.")
+    L.append("- **Локальный градиентный refinement** (шаг спуска по оракулу ∇f): `tpe_refine`, `tpe_gp_refine`.")
     L.append("- Референсы: `random` (нижняя граница), `optuna` (зрелый TPE).")
+    L.append("")
+    L.append("**КЛАССИФИКАЦИЯ (важно для корректной статьи): black-box vs white-box.**")
+    L.append("- *black-box* (без ∇f): `random`, `tpe`, `optuna`, `tpe_gp`.")
+    L.append("- *white-box* (точный ∇f, оракул): формы веса `tpe_w_*`, `tpe_gp_w`, и refinement `tpe_refine`/`tpe_gp_refine`.")
+    L.append("- refinement = по сути обычный **градиентный спуск** с точным ∇f → это ВЕРХНЯЯ ГРАНИЦА «что даёт градиент», "
+             "а не доказательство, что градиент улучшает TPE. Сравнивать честно — внутри своего класса.")
     L.append("")
     L.append("## 3. Установка")
     L.append("- Функции (2D): Sphere, Rosenbrock, Rastrigin, Ackley.")
@@ -80,8 +92,9 @@ def main():
     L.append("\n### 4.2 Доля ячеек, где модификация лучше `tpe` (по final_dist_y)")
     L.append(mdtab(win))
     L.append("\n### 4.3 Инвариантность нормализации")
-    L.append("Для `tpe` И всех 4 форм w(x): raw≡norm (gap=0) — нормализация не влияет (вес считается по "
-             "min-max-рангу норм градиента, константа сокращается). Масштабо-зависим **только GP** (gap≈1.6).")
+    L.append("Для `tpe`, всех 4 форм w(x) и `tpe_refine`: raw≡norm (gap=0) — нормализация не влияет. "
+             "Масштабо-зависимы **только GP-методы** (`tpe_gp`, `tpe_gp_w`, `tpe_gp_refine`; gap≈1.6): "
+             "GP-член в y-единицах конкурирует с лог-плотностью. См. `raw_vs_norm_comparison.csv`.")
     L.append(f"\n### 4.4 Статистическая значимость (ГЛАВНОЕ)")
     L.append(f"Из {len(sig)} сравнений значимы (Holm): {n_sig}; из них **{n_better} — улучшения** над `tpe`, "
              "остальные — ухудшения (все `random`).")
@@ -112,7 +125,7 @@ def main():
     if rob is not None:
         L.append("")
         L.append("**Робастность к выбору теста.** Число значимых УЛУЧШЕНИЙ над `tpe` (из 16 ячеек, метрика "
-                 "final_dist_y) при разных тестах × поправках. Видно: формы веса ≈0 везде, GP — устойчиво значим.")
+                 "final_dist_y) при разных тестах × поправках. Видно: формы веса ≈0 везде; GP и refinement устойчиво значимы.")
         cols = ["algorithm"] + [c for c in rob.columns if c.startswith("final_dist_y|")]
         rtab = rob[cols].copy()
         rtab.columns = ["algorithm"] + [c.replace("final_dist_y|", "").replace("|", "/")
@@ -121,19 +134,22 @@ def main():
         L.append("\nТесты: wilcoxon (знаковых рангов), ttest (парный Стьюдент), sign (знаковый), perm (перестановочный). "
                  "Поправки: raw (без поправки), holm, bh (FDR). Полные данные — `results/tables/significance_robust*.csv`.")
     L.append("")
-    L.append("## 5. Выводы (строго)")
-    L.append("1. Базовый TPE осмыслен (success 36.0% vs random 3.5%).")
-    L.append("2. Нормализация цели не влияет на TPE и на все формы w(x) (инвариантность); важна только для GP.")
-    L.append("3. **Ни одна из 4 форм w(x) не даёт статистически значимого улучшения** над baseline — "
-             "даже при точном градиенте, и это **устойчиво к выбору теста** (Уилкоксон/t-тест/знаковый/"
-             "перестановочный × raw/Holm/BH — см. §4.5). По средним `tpe_w_smooth` «лучший» (87.5% ячеек), "
-             "но это не переживает ни поправку, ни смену теста — средние обманывают.")
-    L.append("4. **GP-переранжирование — единственная модификация со значимым эффектом** (Sphere, Rosenbrock).")
-    L.append("5. Комбинация GP+вес (`tpe_gp_w`) не превосходит чистый GP — выигрыш от GP, не от градиента.")
+    L.append("## 5. Выводы (строго), по классам")
+    L.append("1. Базовый `tpe` осмыслен (success ~25% vs random ~4%); рабочая контрольная точка.")
+    L.append("2. Нормализация цели инвариантна для `tpe`, всех форм w(x) и `tpe_refine`; масштабо-зависимы только GP-методы.")
+    L.append("3. **black-box: GP помогает.** `tpe_gp` (без градиента) значимо лучше baseline в нескольких ячейках, "
+             "наравне с `optuna`. Это главный «честный» (black-box) результат.")
+    L.append("4. **white-box мягкий (вес по ∇f): НЕ помогает.** Ни одна из 4 форм w(x) не даёт значимого улучшения "
+             "(0 при всех тестах и поправках, §4.5). Причина: w∈[0.8,1.2] слишком слаб, чтобы менять argmax l/g; "
+             "+ норма ∇f плохо указывает на минимум на многоэкстремальных функциях.")
+    L.append("5. **white-box жёсткий (refinement): доминирует, но тривиально.** `tpe_refine`/`tpe_gp_refine` дают больше "
+             "всего значимых улучшений — но это обычный **градиентный спуск по точному ∇f**, т.е. верхняя граница "
+             "«что даёт градиент», а не улучшение самого TPE. В реальном black-box HPO точного ∇f нет.")
     L.append("")
     L.append("## 6. Что нельзя утверждать")
-    L.append("- «Градиентная информация (любая форма w) улучшает TPE» — не подтверждено (0 значимых из всех 4 форм).")
-    L.append("- «Нормализация помогает» — для TPE/весов это инвариантность.")
+    L.append("- «Градиентный ВЕС улучшает TPE» — не подтверждено (0 значимых у всех 4 форм).")
+    L.append("- «refinement доказывает пользу градиента для TPE» — нет: это градиентный спуск с оракулом (white-box upper bound).")
+    L.append("- «Нормализация помогает» — для TPE/весов/refine это инвариантность.")
     L.append("- Обобщать на высокую размерность / иные уровни шума — не проверялось.")
     L.append("")
     L.append("## 7. Ограничения")

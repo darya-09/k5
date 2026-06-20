@@ -127,21 +127,21 @@ def main():
     lines.append(f"1. **Базовый `tpe` осмыслен:** средний success {succ.get('tpe', float('nan')):.1f}% против "
                  f"random {succ.get('random', float('nan')):.1f}% и optuna {succ.get('optuna', float('nan')):.1f}% "
                  f"(порог success строгий, поэтому смотрите и на final_dist_y).")
-    lines.append(f"2. **Нормализация цели не влияет на TPE и на все формы w(x)** (gap=0, инвариантность), "
-                 f"и **важна только для GP** (gap {gap_gp:.2g}).")
+    lines.append(f"2. **Нормализация цели инвариантна** для `tpe`, всех форм w(x) и `tpe_refine` (gap=0), "
+                 f"и **важна только для GP-методов** (gap {gap_gp:.2g}): GP мешает y-единицы с лог-плотностью.")
     sw = (sig.groupby("algorithm")["significant_and_better"].sum().to_dict()
           if sig is not None and len(sig) else {})
     w_forms = ["tpe_w_smooth", "tpe_w_smooth_inv", "tpe_w_sign", "tpe_w_sign_inv"]
     w_sig_total = int(sum(sw.get(a, 0) for a in w_forms))
-    lines.append(f"3. **GP-переранжирование — единственная модификация со значимым эффектом:** "
-                 f"`tpe_gp` даёт {int(sw.get('tpe_gp', 0))} значимых улучшений, `tpe_gp_w` — {int(sw.get('tpe_gp_w', 0))} "
-                 f"(гладкая Sphere и овражная Rosenbrock).")
-    lines.append(f"4. **Ни одна из 4 форм w(x) не даёт значимого улучшения** "
-                 f"(`tpe_w_smooth/smooth_inv/sign/sign_inv`: всего {w_sig_total} значимых), "
-                 f"хотя по СРЕДНИМ `tpe_w_smooth` «бьёт» baseline в {win.get('tpe_w_smooth', float('nan'))}% ячеек — "
-                 f"яркий пример, что средние обманывают.")
-    lines.append(f"5. **Комбинация `tpe_gp_w` (GP+вес, аналог gTPE)** не превосходит чистый `tpe_gp` — "
-                 f"выигрыш идёт от GP, а не от градиентного веса.")
+    lines.append(f"3. **Класс black-box: GP-переранжирование помогает** — `tpe_gp` (градиент НЕ использует) даёт "
+                 f"{int(sw.get('tpe_gp', 0))} значимых улучшений над `tpe`, не уступая `optuna` ({int(sw.get('optuna',0))}).")
+    lines.append(f"4. **Класс white-box (мягкий вес по ∇f): не помогает** — ни одна из 4 форм w(x) не даёт значимого "
+                 f"улучшения (`tpe_w_*`: всего {w_sig_total} значимых), хотя по средним отдельные формы «выигрывают» "
+                 f"в части ячеек. Причина: w∈[0.8,1.2] слишком слаб, чтобы менять argmax l/g.")
+    lines.append(f"5. **Класс white-box (refinement = градиентный спуск): доминирует, но тривиально** — "
+                 f"`tpe_refine` {int(sw.get('tpe_refine',0))} и `tpe_gp_refine` {int(sw.get('tpe_gp_refine',0))} значимых "
+                 f"улучшений. Это ожидаемо: refinement — обычный градиентный спуск по ТОЧНОМУ ∇f, т.е. ВЕРХНЯЯ ГРАНИЦА "
+                 f"«что даёт точный градиент», а не доказательство пользы для самого TPE.")
     lines.append("")
     lines.append("**Ограничения (честно):** градиент аналитический/точный (оракул, не black-box); один уровень шума на функцию; "
                  "2D; GP — только для переранжирования. Для сильных выводов нужны парные стат-тесты (Уилкоксон по seeds) и "
