@@ -29,6 +29,14 @@ fin_4 и fin_5 совпадают почти полностью; fin_5 = fin_4 +
 - Исходники: корень репо (в Drive ожидаются в `drive/MyDrive/content/`, рядом пакет `tpe/`).
 - Новый рабочий слой: `coursework_analysis/` (этот проект).
 
+## Пакет `tpe` (получен)
+Загружен в ветку **`main`** репозитория: `tpe/optimizer/{tpe_optimizer,tpe,base_optimizer,random_search}.py`,
+`tpe/weight_func.py`, `tpe/utils/*`. Зависит от внешнего `parzen_estimator` (ставится из pip).
+
+**Ключевой разобранный момент — вызов `weight_fn`** (`tpe/optimizer/tpe.py`, `compute_probability_improvement`):
+вес считается по `samples = stack([x0,x1]).mean(axis=1)` — т.е. по **среднему координат**, 1D-массив на кандидата.
+Это подтверждает дефект метода 2 (см. `experiment_analyses.md` §4 и `scientific_review.md` §8.9).
+
 ## Что непонятно без доп. контекста
-- Внутренности пакета `tpe` (как `TPEOptimizer` использует `weight_fn`, `top`, `min_bandwidth_factor`) — пакета нет в git.
 - Откуда взяты конкретные σ шума и пороги (обоснование не в коде).
+- Версия внешнего `parzen_estimator` (в коде используется как зависимость).
