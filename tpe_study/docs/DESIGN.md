@@ -50,7 +50,7 @@ tpe_study/
    - TPE: воспроизводимость по seed, точки в границах, TPE бьёт random на Sphere;
    - **строгая инвариантность нормализации** базового TPE (raw≡norm на clean);
    - метрики (монотонность best-so-far, шаги до порога) и поправка Холма.
-   Запуск: `pytest` (из папки `tpe_study`).
+   Запуск: `python -m pytest` (из папки `tpe_study`).
 2. **Статистические тесты** — `src/tpe_study/stats.py`, считаются в `run.py`:
    парный Уилкоксон каждой модификации против baseline `tpe` по seeds (common random numbers ⇒
    сравнение парное) + поправка Холма на множественность. Итог → `results/tables/significance_tests.csv`.

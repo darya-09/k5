@@ -22,7 +22,7 @@ PYTHONHASHSEED=0 python run.py --quick    # быстрая проверка (3 s
 
 ## Тесты
 ```bash
-pytest                 # программные тесты корректности кода (tests/)
+python -m pytest       # программные тесты корректности кода (tests/), 21 тест
 ```
 Статистические тесты значимости (парный Уилкоксон + Холм) считаются автоматически в `run.py`
 и пишутся в `results/tables/significance_tests.csv`. Разница двух видов тестов — в `docs/DESIGN.md`.

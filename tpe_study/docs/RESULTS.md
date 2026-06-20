@@ -58,6 +58,32 @@
   - `tpe_gradw`: 56.2%
   - `tpe_gradw_gp`: 62.5%
 
+## Статистическая значимость (парный Уилкоксон vs `tpe`, поправка Холма)
+
+Из 80 сравнений значимы (p_holm<0.05): **7 в пользу модификации**, 4 против. Остальные различия статистически не подтверждены.
+
+Значимые улучшения над baseline `tpe`:
+
+| function | scale | data | algorithm | median_delta | p_holm |
+|---|---|---|---|---|---|
+| Rosenbrock | norm | clean | optuna | -0.3632 | 0.01041 |
+| Rosenbrock | norm | noisy_y | optuna | -0.6301 | 0.02922 |
+| Rosenbrock | raw | clean | optuna | -0.3632 | 0.01041 |
+| Rosenbrock | raw | noisy_y | optuna | -0.6301 | 0.02922 |
+| Rosenbrock | raw | noisy_y | tpe_gradw_gp | -0.6181 | 0.04099 |
+| Sphere | raw | clean | tpe_gp | -0.002728 | 0.003767 |
+| Sphere | raw | clean | tpe_gradw_gp | -0.002633 | 0.002899 |
+
+Сколько значимых выигрышей у каждой модификации (из 16 ячеек):
+
+| algorithm | n_significant_wins |
+|---|---|
+| optuna | 4 |
+| random | 0 |
+| tpe_gp | 1 |
+| tpe_gradw | 0 |
+| tpe_gradw_gp | 2 |
+
 ## Ablation: каждая модификация против baseline `tpe`
 
 Δ = algo − tpe по final_dist_y (меньше нуля → модификация лучше).
