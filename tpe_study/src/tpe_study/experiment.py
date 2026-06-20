@@ -36,12 +36,12 @@ THRESHOLDS = {"Sphere": 1e-3, "Rosenbrock": 5e-2, "Rastrigin": 1.0, "Ackley": 0.
 ALGORITHMS = [
     "random",
     "tpe",
-    "tpe_w_smooth",       # w(x): tanh, предпочтение БОЛЬШОМУ градиенту
-    "tpe_w_smooth_inv",   # w(x): -tanh, предпочтение МАЛОМУ градиенту
-    "tpe_w_sign",         # w(x): резкая (сигмоида), большому градиенту
-    "tpe_w_sign_inv",     # w(x): резкая, малому градиенту
+    "tpe_w_smooth",       # вес КАНДИДАТА w(x)=tanh, предпочтение БОЛЬШОМУ ‖∇f‖ (механизм fin_4)
+    "tpe_w_smooth_inv",   # вес КАНДИДАТА w(x)=-tanh, предпочтение МАЛОМУ ‖∇f‖
+    "tpe_w_sign",         # вес КАНДИДАТА w(x)=сигмоида·5, большому ‖∇f‖
+    "tpe_w_sign_inv",     # вес КАНДИДАТА, малому ‖∇f‖
     "tpe_gp",             # GP-переранжирование
-    "tpe_gp_w",           # GP + w(x)=smooth_inv (аналог gTPE)
+    "tpe_gp_w",           # GP + взвешивание НАБЛЮДЕНИЙ по 1/‖∇f‖ (механизм gТPE из fin_5)
     "optuna",
 ]
 
@@ -56,14 +56,17 @@ def _run_one(algo: str, objective, bench: Benchmark, n_trials: int,
     if algo == "optuna":
         return optuna_tpe(objective, bounds, n_trials, n_init, n_candidates, seed)
 
+    # grad_fn — оракул градиента (для веса кандидатов). Берём RAW-градиент функции:
+    # нормировка норм по батчу делает вес инвариантным к масштабу, так что scale не важен.
+    gfn = bench.grad
     flags = {
         "tpe":              dict(),
-        "tpe_w_smooth":     dict(weight_shape="smooth"),
-        "tpe_w_smooth_inv": dict(weight_shape="smooth_inv"),
-        "tpe_w_sign":       dict(weight_shape="sign"),
-        "tpe_w_sign_inv":   dict(weight_shape="sign_inv"),
+        "tpe_w_smooth":     dict(cand_weight_shape="smooth", grad_fn=gfn),
+        "tpe_w_smooth_inv": dict(cand_weight_shape="smooth_inv", grad_fn=gfn),
+        "tpe_w_sign":       dict(cand_weight_shape="sign", grad_fn=gfn),
+        "tpe_w_sign_inv":   dict(cand_weight_shape="sign_inv", grad_fn=gfn),
         "tpe_gp":           dict(gp_rerank=True),
-        "tpe_gp_w":         dict(gp_rerank=True, weight_shape="smooth_inv"),
+        "tpe_gp_w":         dict(gp_rerank=True, obs_gradient_weight=True),
     }[algo]
     opt = TPE(bounds=bounds, n_init=n_init, gamma=gamma, n_candidates=n_candidates,
               min_bw_frac=min_bw_frac, seed=seed, **flags)

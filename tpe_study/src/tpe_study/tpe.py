@@ -175,15 +175,15 @@ class TPE:
     min_bw_frac: float = 1e-2
     seed: Optional[int] = None
     # --- флаги-модификации (по одному фактору) ---
-    # weight_shape: форма градиентного веса w(x) для наблюдений KDE «хорошей» группы.
-    #   None         — без веса (базовый TPE);
-    #   "smooth"     — w растёт с ‖∇f‖ (tanh): предпочтение точкам с БОЛЬШИМ градиентом;
-    #   "smooth_inv" — w растёт при МАЛОМ ‖∇f‖ (−tanh): предпочтение «плоским»/стационарным;
-    #   "sign"       — резкая версия smooth (сигмоида·5);
-    #   "sign_inv"   — резкая версия smooth_inv.
-    # Все формы дают w∈[0.8,1.2] (мягкая модификация), как в исходных ноутбуках,
-    # но градиент берётся в РЕАЛЬНОЙ точке наблюдения (исправление дефекта оригинала).
-    weight_shape: Optional[str] = None
+    # cand_weight_shape: форма градиентного веса w(x), домножающего АКВИЗИЦИЮ КАНДИДАТА
+    #   (как в repo-TPE/fin_4: pi кандидата *= w(x_cand)). Требует grad_fn (оракул градиента).
+    #   None / "smooth"(tanh) / "smooth_inv"(−tanh) / "sign"(сигм·5) / "sign_inv".
+    #   smooth/sign дают больший вес кандидатам с БОЛЬШИМ ‖∇f‖, *_inv — с МАЛЫМ. w∈[0.8,1.2].
+    #   Градиент берётся в РЕАЛЬНОЙ точке кандидата (исправление дефекта оригинала с (mean,0)).
+    cand_weight_shape: Optional[str] = None
+    grad_fn: Optional[Callable[[Array], Array]] = None   # оракул градиента для cand_weight_shape
+    # obs_gradient_weight: взвешивание НАБЛЮДЕНИЙ KDE по 1/‖∇f‖ (механизм gТPE из fin_5).
+    obs_gradient_weight: bool = False
     gp_rerank: bool = False
     gp_beta: float = 0.2
     # --- состояние ---
@@ -195,7 +195,9 @@ class TPE:
         self.bounds = [(float(a), float(b)) for a, b in self.bounds]
         self.dim = len(self.bounds)
         self.rng = np.random.default_rng(self.seed)
-        assert self.weight_shape in (None, "smooth", "smooth_inv", "sign", "sign_inv")
+        assert self.cand_weight_shape in (None, "smooth", "smooth_inv", "sign", "sign_inv")
+        if self.cand_weight_shape is not None and self.grad_fn is None:
+            raise ValueError("cand_weight_shape требует grad_fn (оракул градиента)")
         if self.gp_rerank:
             self.gp = SimpleGP()
 
@@ -234,31 +236,39 @@ class TPE:
         return good, bad
 
     def _obs_weights(self, idx: List[int]) -> Optional[Array]:
-        """Веса наблюдений «хорошей» группы для KDE. Без модификации -> None (равные веса).
+        """Веса НАБЛЮДЕНИЙ KDE (механизм gТPE). None -> равные веса.
 
-        4 формы w(x) (как в исходных ноутбуках), но по ИСТИННОМУ ‖∇f‖ в РЕАЛЬНОЙ точке:
-          1) нормируем нормы градиентов наблюдений в [-1,1] (z0);
-          2) применяем форму z=shape(z0);
-          3) w = clip(1 + 0.2*z, 0.8, 1.2)  — мягкая модификация базового l(x)/g(x).
-        smooth/sign дают больший вес большому градиенту; *_inv — малому градиенту.
+        obs_gradient_weight: w_i = 1/(‖∇f(x_i)‖+eps) — больше вес наблюдениям с малым
+        градиентом (близким к стационарным). Истинный градиент в реальной точке.
         """
-        if self.weight_shape is None:
+        if not self.obs_gradient_weight:
             return None
         norms = np.array([np.linalg.norm(self.history_g[i]) for i in idx], dtype=float)
+        return np.clip(1.0 / (norms + 1e-8), 1e-3, 1e3)
+
+    def _cand_log_weight(self, cand: Array) -> Array:
+        """log w(x) для КАЖДОГО кандидата (механизм fin_4: домножение аквизиции).
+
+        Норма градиента в реальной точке кандидата нормируется по батчу в [-1,1],
+        применяется форма, w=clip(1+0.2*z, 0.8, 1.2). Возвращает log(w) (форма (n_cand,)).
+        """
+        if self.cand_weight_shape is None:
+            return np.zeros(len(cand))
+        norms = np.array([np.linalg.norm(self.grad_fn(c)) for c in cand], dtype=float)
         v_min, v_max = float(norms.min()), float(norms.max())
         if (v_max - v_min) <= 1e-12:
-            z0 = np.zeros_like(norms)                      # все градиенты равны -> нейтрально
+            z0 = np.zeros_like(norms)
         else:
             z0 = 2.0 * (norms - v_min) / (v_max - v_min) - 1.0
-        if self.weight_shape == "smooth":
+        if self.cand_weight_shape == "smooth":
             z = np.tanh(z0)
-        elif self.weight_shape == "smooth_inv":
+        elif self.cand_weight_shape == "smooth_inv":
             z = -np.tanh(z0)
-        elif self.weight_shape == "sign":
+        elif self.cand_weight_shape == "sign":
             z = 2.0 / (1.0 + np.exp(-np.clip(5.0 * z0, -500, 500))) - 1.0
-        elif self.weight_shape == "sign_inv":
+        elif self.cand_weight_shape == "sign_inv":
             z = -(2.0 / (1.0 + np.exp(-np.clip(5.0 * z0, -500, 500))) - 1.0)
-        return np.clip(1.0 + 0.2 * z, 0.8, 1.2)
+        return np.log(np.clip(1.0 + 0.2 * z, 0.8, 1.2))
 
     def _fit_kdes(self, idx: List[int], weights: Optional[Array]) -> List[WeightedKDE1D]:
         return [
@@ -284,6 +294,9 @@ class TPE:
         logl = sum(l_models[d].logpdf_many(cand[:, d]) for d in range(self.dim))
         logg = sum(g_models[d].logpdf_many(cand[:, d]) for d in range(self.dim))
         score = logl - logg                                          # = log l(x)/g(x)
+
+        # fin_4-механизм: домножаем аквизицию кандидата на w(x) (в лог-пространстве).
+        score = score + self._cand_log_weight(cand)
 
         if self.gp_rerank:
             for i in range(self.n_candidates):
