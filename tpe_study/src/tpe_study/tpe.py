@@ -81,6 +81,8 @@ class WeightedKDE1D:
         bws[n] = span                                  # prior-компонента всегда широкая
         self.bws = np.clip(bws, min_bw_frac * span, span)
         self.bw = float(np.median(self.bws[:n])) if n else span   # для справки
+        # лог-веса с полом, чтобы не ловить log(0) при нулевом весе компоненты
+        self.log_weights = np.log(np.where(self.weights > 0, self.weights, 1e-300))
 
     def _log_components(self, xs: Array) -> Array:
         z = (xs[:, None] - self.centers[None, :]) / self.bws[None, :]   # (m, k)
@@ -88,7 +90,7 @@ class WeightedKDE1D:
 
     def logpdf_many(self, xs: Array) -> Array:
         xs = np.asarray(xs, dtype=float)
-        out = logsumexp(np.log(self.weights)[None, :] + self._log_components(xs), axis=1)
+        out = logsumexp(self.log_weights[None, :] + self._log_components(xs), axis=1)
         out[(xs < self.lo) | (xs > self.hi)] = -np.inf
         return out
 

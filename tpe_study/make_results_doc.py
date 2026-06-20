@@ -33,6 +33,7 @@ def main():
     df = pd.read_csv(T / "all_results.csv")
     summ = pd.read_csv(T / "summary_key_metrics.csv")
     abl = pd.read_csv(T / "ablation_vs_tpe.csv")
+    sig = pd.read_csv(T / "significance_tests.csv") if (T / "significance_tests.csv").exists() else None
     cfg = json.load(open(ROOT / "configs" / "default.json"))
 
     # Авто-выводы из реальных чисел -------------------------------------------
@@ -85,6 +86,24 @@ def main():
     for a, v in win.items():
         lines.append(f"  - `{a}`: {v}%")
     lines.append("")
+
+    if sig is not None and len(sig):
+        n_sig_better = int(sig["significant_and_better"].sum())
+        n_sig_worse = int((sig["significant_holm"] & (sig["direction"] == "worse")).sum())
+        lines.append("## Статистическая значимость (парный Уилкоксон vs `tpe`, поправка Холма)\n")
+        lines.append(f"Из {len(sig)} сравнений значимы (p_holm<0.05): "
+                     f"**{n_sig_better} в пользу модификации**, {n_sig_worse} против. "
+                     f"Остальные различия статистически не подтверждены.\n")
+        lines.append("Значимые улучшения над baseline `tpe`:\n")
+        win_tbl = sig[sig["significant_and_better"]][
+            ["function", "scale", "data", "algorithm", "median_delta", "p_holm"]]
+        lines.append(md_table(win_tbl) if len(win_tbl) else "_(значимых улучшений нет)_")
+        lines.append("")
+        by_algo = (sig.groupby("algorithm")["significant_and_better"].sum()
+                   .reset_index().rename(columns={"significant_and_better": "n_significant_wins"}))
+        lines.append("Сколько значимых выигрышей у каждой модификации (из 16 ячеек):\n")
+        lines.append(md_table(by_algo))
+        lines.append("")
 
     lines.append("## Ablation: каждая модификация против baseline `tpe`\n")
     lines.append("Δ = algo − tpe по final_dist_y (меньше нуля → модификация лучше).\n")

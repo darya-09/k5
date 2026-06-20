@@ -28,8 +28,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from tpe_study.experiment import ALGORITHMS, run_cell                # noqa: E402
+from tpe_study.experiment import ALGORITHMS, THRESHOLDS, run_cell     # noqa: E402
 from tpe_study.functions import BENCHMARKS                            # noqa: E402
+from tpe_study.metrics import steps_to_threshold                      # noqa: E402
+from tpe_study.stats import paired_significance_vs_baseline           # noqa: E402
 from tpe_study import plots                                           # noqa: E402
 
 
@@ -54,9 +56,11 @@ def main():
     f_max = {name: BENCHMARKS[name].estimate_fmax() for name in cfg["functions"]}
 
     rows = []
+    per_seed = []                     # по-seed финальные значения -> нужны для парных стат-тестов
     t0 = time.time()
     for fname in cfg["functions"]:
         bench = BENCHMARKS[fname]
+        thr = THRESHOLDS[fname]
         for scale in cfg["scales"]:
             for data in cfg["data_types"]:
                 curves_by_algo = {}
@@ -64,6 +68,14 @@ def main():
                     row, curves = run_cell(bench, scale, data, algo, seeds, cfg, f_max[fname])
                     rows.append(row)
                     curves_by_algo[algo] = curves
+                    for c in curves:          # сохраняем финал каждого seed
+                        per_seed.append({
+                            "function": fname, "scale": scale, "data": data,
+                            "algorithm": algo, "seed": c["seed"],
+                            "final_dist_y": float(c["dist_y"][-1]),
+                            "final_dist_x": float(c["dist_x"][-1]),
+                            "steps": steps_to_threshold(c["dist_y"], thr),
+                        })
                     print(f"[{time.time()-t0:6.1f}s] {fname:11s} {scale:4s} {data:8s} "
                           f"{algo:13s} success={row['success_rate_%']:5.1f}% "
                           f"final_dist_y={row['final_dist_y_mean']:.4g}")
@@ -77,6 +89,9 @@ def main():
     df = pd.DataFrame(rows)
     df.to_csv(tables / "all_results.csv", index=False)
 
+    per_seed_df = pd.DataFrame(per_seed)
+    per_seed_df.to_csv(tables / "per_seed_final.csv", index=False)
+
     # Удобная сводка: только ключевые метрики.
     key = df[["function", "scale", "data", "algorithm", "success_rate_%",
               "steps_mean", "final_dist_y_mean", "final_dist_x_mean"]]
@@ -85,6 +100,12 @@ def main():
     # Ablation-таблица: каждая модификация против baseline `tpe` при тех же (function,scale,data).
     abl = _ablation(df)
     abl.to_csv(tables / "ablation_vs_tpe.csv", index=False)
+
+    # СТАТ-ТЕСТЫ значимости (парный Уилкоксон vs baseline `tpe` + поправка Холма).
+    sig = paired_significance_vs_baseline(per_seed_df, metric="final_dist_y", baseline="tpe")
+    sig.to_csv(tables / "significance_tests.csv", index=False)
+    n_sig = int(sig["significant_holm"].sum()) if len(sig) else 0
+    print(f"Стат-тестов: {len(sig)}, значимых (Holm, p<0.05): {n_sig}")
 
     print(f"\nГotovo за {time.time()-t0:.1f}s. Строк: {len(df)}.")
     print("Таблицы:", tables)
