@@ -119,7 +119,7 @@ def _ablation(df: pd.DataFrame) -> pd.DataFrame:
         if base.empty:
             continue
         b = base.iloc[0]
-        for algo in ["tpe_gradw", "tpe_gp", "tpe_gradw_gp", "optuna", "random"]:
+        for algo in [a for a in g["algorithm"].unique() if a != "tpe"]:
             r = g[g["algorithm"] == algo]
             if r.empty:
                 continue

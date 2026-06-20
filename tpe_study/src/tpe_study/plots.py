@@ -12,12 +12,15 @@ import numpy as np
 from .functions import Benchmark
 
 ALGO_STYLE = {
-    "random":       ("black",      "--"),
-    "tpe":          ("tab:gray",   "-"),
-    "tpe_gradw":    ("tab:blue",   "-"),
-    "tpe_gp":       ("tab:green",  "-"),
-    "tpe_gradw_gp": ("tab:red",    "-"),
-    "optuna":       ("tab:purple", "-."),
+    "random":           ("black",      "--"),
+    "tpe":              ("tab:gray",   "-"),
+    "tpe_w_smooth":     ("tab:blue",   "-"),
+    "tpe_w_smooth_inv": ("tab:cyan",   "-"),
+    "tpe_w_sign":       ("tab:red",    "-"),
+    "tpe_w_sign_inv":   ("tab:orange", "-"),
+    "tpe_gp":           ("tab:green",  "-"),
+    "tpe_gp_w":         ("tab:brown",  "-"),
+    "optuna":           ("tab:purple", "-."),
 }
 
 
@@ -45,7 +48,7 @@ def plot_convergence(bench: Benchmark, scale: str, data: str,
 def plot_choice_map(bench: Benchmark, scale: str, data: str,
                     curves_by_algo: Dict[str, List[dict]], out: Path, seed_index: int = 0):
     """Контур raw clean функции + выбранные точки для 3 ключевых алгоритмов."""
-    show = [a for a in ["tpe", "tpe_gradw", "tpe_gradw_gp"] if a in curves_by_algo]
+    show = [a for a in ["tpe", "tpe_w_smooth_inv", "tpe_gp_w"] if a in curves_by_algo]
     (lo0, hi0), (lo1, hi1) = bench.bounds
     gx = np.linspace(lo0, hi0, 160); gy = np.linspace(lo1, hi1, 160)
     GX, GY = np.meshgrid(gx, gy)

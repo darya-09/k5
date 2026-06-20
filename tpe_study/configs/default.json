@@ -9,6 +9,6 @@
   "functions": ["Sphere", "Rosenbrock", "Rastrigin", "Ackley"],
   "scales": ["raw", "norm"],
   "data_types": ["clean", "noisy_y"],
-  "algorithms": ["random", "tpe", "tpe_gradw", "tpe_gp", "tpe_gradw_gp", "optuna"],
+  "algorithms": ["random", "tpe", "tpe_w_smooth", "tpe_w_smooth_inv", "tpe_w_sign", "tpe_w_sign_inv", "tpe_gp", "tpe_gp_w", "optuna"],
   "make_figures": true
 }

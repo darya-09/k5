@@ -83,10 +83,16 @@ run.py ── агрегирует по seeds, пишет CSV (all_results, summ
 |---|---|---|
 | `random` | — | нижняя граница |
 | `tpe` | базовый | контрольная точка (rank-based l(x)/g(x)) |
-| `tpe_gradw` | `gradient_weight=True` | **фактор: градиентное взвешивание** наблюдений KDE по 1/‖∇f‖ (в реальной точке) |
+| `tpe_w_smooth` | `weight_shape="smooth"` | **w(x): tanh**, больше вес БОЛЬШОМУ ‖∇f‖ |
+| `tpe_w_smooth_inv` | `weight_shape="smooth_inv"` | **w(x): −tanh**, больше вес МАЛОМУ ‖∇f‖ |
+| `tpe_w_sign` | `weight_shape="sign"` | **w(x): резкая** (сигмоида), большому ‖∇f‖ |
+| `tpe_w_sign_inv` | `weight_shape="sign_inv"` | **w(x): резкая**, малому ‖∇f‖ |
 | `tpe_gp` | `gp_rerank=True` | **фактор: GP-переранжирование** кандидатов |
-| `tpe_gradw_gp` | оба | взаимодействие (это «gTPE») |
+| `tpe_gp_w` | `gp_rerank + smooth_inv` | GP + вес (аналог «gTPE») |
 | `optuna` | — | внешний зрелый референс |
+
+Все 4 формы w(x) воспроизводят исходный эксперимент по весу (`smooth/smooth_inv/sign_like/sign_like_inv`),
+но градиент берётся в РЕАЛЬНОЙ точке наблюдения и w∈[0.8,1.2].
 
 **Нормализация** — это фактор `scale` (свойство задачи, общий для всех алгоритмов).
 Сравнение «нужна ли нормализация» = `tpe@raw` против `tpe@norm`.

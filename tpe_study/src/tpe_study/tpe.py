@@ -175,9 +175,15 @@ class TPE:
     min_bw_frac: float = 1e-2
     seed: Optional[int] = None
     # --- флаги-модификации (по одному фактору) ---
-    gradient_weight: bool = False
-    gradient_weight_power: float = 1.0
-    gradient_eps: float = 1e-8
+    # weight_shape: форма градиентного веса w(x) для наблюдений KDE «хорошей» группы.
+    #   None         — без веса (базовый TPE);
+    #   "smooth"     — w растёт с ‖∇f‖ (tanh): предпочтение точкам с БОЛЬШИМ градиентом;
+    #   "smooth_inv" — w растёт при МАЛОМ ‖∇f‖ (−tanh): предпочтение «плоским»/стационарным;
+    #   "sign"       — резкая версия smooth (сигмоида·5);
+    #   "sign_inv"   — резкая версия smooth_inv.
+    # Все формы дают w∈[0.8,1.2] (мягкая модификация), как в исходных ноутбуках,
+    # но градиент берётся в РЕАЛЬНОЙ точке наблюдения (исправление дефекта оригинала).
+    weight_shape: Optional[str] = None
     gp_rerank: bool = False
     gp_beta: float = 0.2
     # --- состояние ---
@@ -189,6 +195,7 @@ class TPE:
         self.bounds = [(float(a), float(b)) for a, b in self.bounds]
         self.dim = len(self.bounds)
         self.rng = np.random.default_rng(self.seed)
+        assert self.weight_shape in (None, "smooth", "smooth_inv", "sign", "sign_inv")
         if self.gp_rerank:
             self.gp = SimpleGP()
 
@@ -227,16 +234,31 @@ class TPE:
         return good, bad
 
     def _obs_weights(self, idx: List[int]) -> Optional[Array]:
-        """Веса наблюдений для KDE. Без модификации -> None (равные веса).
+        """Веса наблюдений «хорошей» группы для KDE. Без модификации -> None (равные веса).
 
-        С gradient_weight: w_i = 1/(||∇f(x_i)|| + eps)^p — больше вес точкам с малым
-        градиентом (близким к стационарным). Берём ИСТИННЫЙ градиент в РЕАЛЬНОЙ точке.
+        4 формы w(x) (как в исходных ноутбуках), но по ИСТИННОМУ ‖∇f‖ в РЕАЛЬНОЙ точке:
+          1) нормируем нормы градиентов наблюдений в [-1,1] (z0);
+          2) применяем форму z=shape(z0);
+          3) w = clip(1 + 0.2*z, 0.8, 1.2)  — мягкая модификация базового l(x)/g(x).
+        smooth/sign дают больший вес большому градиенту; *_inv — малому градиенту.
         """
-        if not self.gradient_weight:
+        if self.weight_shape is None:
             return None
-        norms = np.array([np.linalg.norm(self.history_g[i]) for i in idx])
-        w = 1.0 / (norms + self.gradient_eps) ** self.gradient_weight_power
-        return np.clip(w, 1e-3, 1e3)
+        norms = np.array([np.linalg.norm(self.history_g[i]) for i in idx], dtype=float)
+        v_min, v_max = float(norms.min()), float(norms.max())
+        if (v_max - v_min) <= 1e-12:
+            z0 = np.zeros_like(norms)                      # все градиенты равны -> нейтрально
+        else:
+            z0 = 2.0 * (norms - v_min) / (v_max - v_min) - 1.0
+        if self.weight_shape == "smooth":
+            z = np.tanh(z0)
+        elif self.weight_shape == "smooth_inv":
+            z = -np.tanh(z0)
+        elif self.weight_shape == "sign":
+            z = 2.0 / (1.0 + np.exp(-np.clip(5.0 * z0, -500, 500))) - 1.0
+        elif self.weight_shape == "sign_inv":
+            z = -(2.0 / (1.0 + np.exp(-np.clip(5.0 * z0, -500, 500))) - 1.0)
+        return np.clip(1.0 + 0.2 * z, 0.8, 1.2)
 
     def _fit_kdes(self, idx: List[int], weights: Optional[Array]) -> List[WeightedKDE1D]:
         return [

@@ -31,7 +31,19 @@ from .tpe import TPE
 # Пороги для "успеха" (шаги до порога) — по RAW CLEAN ошибке значения. Единые для всех алгоритмов.
 THRESHOLDS = {"Sphere": 1e-3, "Rosenbrock": 5e-2, "Rastrigin": 1.0, "Ackley": 0.5}
 
-ALGORITHMS = ["random", "tpe", "tpe_gradw", "tpe_gp", "tpe_gradw_gp", "optuna"]
+# Полный набор алгоритмов. 4 формы w(x) — это отдельный «эксперимент по весу»;
+# tpe_gp — только GP; tpe_gp_w — GP + лучший по смыслу вес (smooth_inv, «gTPE»-аналог).
+ALGORITHMS = [
+    "random",
+    "tpe",
+    "tpe_w_smooth",       # w(x): tanh, предпочтение БОЛЬШОМУ градиенту
+    "tpe_w_smooth_inv",   # w(x): -tanh, предпочтение МАЛОМУ градиенту
+    "tpe_w_sign",         # w(x): резкая (сигмоида), большому градиенту
+    "tpe_w_sign_inv",     # w(x): резкая, малому градиенту
+    "tpe_gp",             # GP-переранжирование
+    "tpe_gp_w",           # GP + w(x)=smooth_inv (аналог gTPE)
+    "optuna",
+]
 
 
 def _run_one(algo: str, objective, bench: Benchmark, n_trials: int,
@@ -45,10 +57,13 @@ def _run_one(algo: str, objective, bench: Benchmark, n_trials: int,
         return optuna_tpe(objective, bounds, n_trials, n_init, n_candidates, seed)
 
     flags = {
-        "tpe":          dict(),
-        "tpe_gradw":    dict(gradient_weight=True),
-        "tpe_gp":       dict(gp_rerank=True),
-        "tpe_gradw_gp": dict(gradient_weight=True, gp_rerank=True),
+        "tpe":              dict(),
+        "tpe_w_smooth":     dict(weight_shape="smooth"),
+        "tpe_w_smooth_inv": dict(weight_shape="smooth_inv"),
+        "tpe_w_sign":       dict(weight_shape="sign"),
+        "tpe_w_sign_inv":   dict(weight_shape="sign_inv"),
+        "tpe_gp":           dict(gp_rerank=True),
+        "tpe_gp_w":         dict(gp_rerank=True, weight_shape="smooth_inv"),
     }[algo]
     opt = TPE(bounds=bounds, n_init=n_init, gamma=gamma, n_candidates=n_candidates,
               min_bw_frac=min_bw_frac, seed=seed, **flags)
