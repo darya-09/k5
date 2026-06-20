@@ -47,6 +47,16 @@ ALGORITHMS = [
     "optuna",
 ]
 
+# Классификация для честной интерпретации (по решению: black-box vs white-box).
+# black-box — не используют градиент целевой функции; white-box — используют ТОЧНЫЙ ∇f (оракул).
+ALGO_FAMILY = {
+    "random": "black-box", "tpe": "black-box", "optuna": "black-box", "tpe_gp": "black-box",
+    "tpe_w_smooth": "white-box(∇f)", "tpe_w_smooth_inv": "white-box(∇f)",
+    "tpe_w_sign": "white-box(∇f)", "tpe_w_sign_inv": "white-box(∇f)",
+    "tpe_refine": "white-box(∇f-descent)", "tpe_gp_refine": "white-box(∇f-descent)",
+    "tpe_gp_w": "white-box(∇f)",
+}
+
 
 def _run_one(algo: str, objective, bench: Benchmark, n_trials: int,
              n_init: int, n_candidates: int, gamma: float, min_bw_frac: float,
