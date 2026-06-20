@@ -1,0 +1,75 @@
+КОНТЕКСТ ДЛЯ ПЕРЕДАЧИ В ДРУГОЙ ЧАТ — исследование "способы изменения ТПЕ (TPE)"
+=============================================================================
+
+ЦЕЛЬ
+Сравнить разные способы модификации алгоритма TPE (Tree-structured Parzen Estimator)
+на 2D benchmark-функциях: Sphere, Rosenbrock, Rastrigin, Ackley. Наблюдения бывают
+clean и noisy_y (гаусов шум в y). Качество ВСЕГДА меряется по raw clean функции,
+метрика "best-so-far" по наблюдаемому loss.
+
+РЕПОЗИТОРИЙ (5 исходных Jupyter-ноутбуков, НЕ менять):
+- fin_fin_1 (2).ipynb         -> 01 baseline clean (random / repo-TPE no_w / optuna). n_init=25, мягкие пороги.
+- fin_fin_2 (1).ipynb         -> 02 noisy-y baseline (те же 3 метода на clean и noisy). n_init=10.
+- fin_3_raw_vs_norm_*.ipynb   -> 03 МЕТОД 1: нормализация objective f_norm=(f-min)/(max-min).
+- fin_4_with_w_x.ipynb        -> 04 МЕТОД 2: repo-TPE + weight_fn w(x)=clip(1+0.2*z,0.8,1.2), z от ||grad||;
+                                 4 формы: smooth, smooth_inv, sign_like, sign_like_inv.
+- fin_5_gTPE.ipynb            -> 05 МЕТОД 3: gTPE = своя реализация GradientAwareTPE
+                                 (grad-взвешивание KDE + GP-reranking кандидатов).
+
+ОБЩИЕ ПАРАМЕТРЫ: SEEDS=range(30), MAX_EVALS=100, BASE_KWARGS{n_ei_candidates=24,
+min_bandwidth_factor=1e-2, top(gamma)=0.2}. Пороги success в 03/04/05 жёсткие
+(Sphere 1e-3, Rosenbrock 5e-2, Rastrigin 1.0, Ackley 0.5). Метрики: success_rate_%,
+steps_mean/var/median, final_dist_x_* (||x_best-x*||), final_dist_y_* (raw clean f).
+
+РЕАЛЬНЫЕ РЕЗУЛЬТАТЫ (из сохранённых выводов исходников, не выдуманы):
+- Baseline 01 success_rate%: Sphere no_w 60.0/opt 43.3/rnd 3.3; Rosenbrock 53.3/30/23.3;
+  Rastrigin 56.7/36.7/3.3; Ackley no_w 23.3/opt 36.7/rnd 3.3. => repo-TPE > random, >= optuna на 3/4.
+- МЕТОД 1 (fin_3): на CLEAN данных raw и norm дают ИДЕНТИЧНЫЕ метрики (delta_success=0 везде,
+  steps_mean совпадают). Причина: TPE ранговый -> инвариантен к монотонно-аффинному масштабу.
+  Нормализация для TPE на clean = no-op. В noisy различия ЕСТЬ, но они артефактны: seed шума
+  зависит от scale_type -> raw и norm видят РАЗНЫЙ шум (сравнение спутано).
+- МЕТОД 3 (fin_5): Sphere raw noisy final_dist_y_mean: gTPE ~0.397 vs repo-TPE/optuna ~0.006-0.02
+  => gTPE на гладкой функции ХУЖЕ.
+
+ЧТО МОЖНО УТВЕРЖДАТЬ СТРОГО:
+1) repo-TPE стабильно лучше random, не хуже Optuna на большинстве функций.
+2) Нормализация objective не влияет на ранговый TPE на clean (инвариантность, подтверждена delta=0).
+3) При малом шуме базовый TPE устойчив.
+4) gTPE не доминирует; на гладких функциях уступает.
+
+ЧЕГО НЕЛЬЗЯ УТВЕРЖДАТЬ (пока):
+- "w(x) улучшает TPE" — НЕ доказано. Риск: неизвестно, как repo-TPEOptimizer вызывает weight_fn
+  (по 2D-точкам или покоординатно). При покоординатном вызове код подставляет x1=0 и считает
+  НЕВЕРНЫЙ градиент (см. функцию _as_2d_points в fin_4/fin_5). НАДО проверить исходник пакета tpe.
+- "нормализация помогает при шуме" — сравнение спутано по шуму.
+- "gTPE лучше/хуже из-за градиента" — gTPE отличается сразу по многим осям (реализация+веса+GP),
+  это не ablation; к тому же в noisy он получает ТОЧНЫЙ аналитический градиент.
+
+КЛЮЧЕВЫЕ ПРОБЛЕМЫ:
+ТЕХНИЧЕСКИЕ: пакет tpe только в Drive (из git не воспроизводится); n_init=25 в fin_1 vs 10 в
+остальных; разные пороги success в 01/02 vs 03/04/05; seed шума через hash() зависит от PYTHONHASHSEED.
+НАУЧНЫЕ: 2D-вызов weight_fn под вопросом; методы 2/3 используют ОРАКУЛЬНЫЙ точный градиент;
+noisy raw-vs-norm спутан; gTPE не ablation; нет sensitivity по sigma/gamma и нет тестов значимости.
+
+ЧЕСТНОЕ СРАВНЕНИЕ:
+- Корректный ablation ровно одного фактора есть только в fin_4: no_w vs grad_* при общих (scale,data,seed).
+- fin_3 clean: один фактор (нейтральный). fin_3 noisy и fin_5: несколько факторов сразу.
+
+СЛЕДУЮЩИЕ ШАГИ (приоритет):
+1. Проверить, как TPEOptimizer вызывает weight_fn (печать формы x внутри w). Это решает судьбу метода 2.
+2. Стат-тесты: парный Уилкоксон no_w vs grad_* по 30 seeds + поправка Холма.
+3. Sensitivity по уровню шума sigma и по gamma/n_init.
+4. Для fin_3 noisy: общий шум для raw и norm (убрать scale_type из seed).
+5. Для gTPE: ablation (только веса / только GP / веса+GP) на ОДНОЙ реализации.
+6. Заменить аналитический градиент на шумный/конечно-разностный (ближе к реальному HPO).
+
+СОЗДАННАЯ СТРУКТУРА (рядом с исходниками, исходники не тронуты):
+coursework_analysis/colab_experiments/00_repository_map.ipynb ... 07_final_summary_for_coursework.ipynb
+(00 карта, 01-05 обёртки над исходниками с разбором, 06 сравнение+таблицы+графики, 07 финал),
+configs/{common_config,experiments_config}.json, results/{raw,processed}/, tables/, figures/,
+reports/{final_experiments_summary.md, repository_map.md, experiment_analyses.md, scientific_review.md, этот файл}.
+
+НУЖНО ПРЕДОСТАВИТЬ ДЛЯ ЗАПУСКА:
+пакет tpe/ в Drive (drive/MyDrive/content/tpe); исходные fin_*.ipynb; доступ к Drive;
+ConfigSpace==1.2.0 + parzen-estimator + optuna + numpy + matplotlib + scipy;
+подтверждение про вызов weight_fn; желательно PYTHONHASHSEED=0.

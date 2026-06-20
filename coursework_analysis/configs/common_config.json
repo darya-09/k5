@@ -1,0 +1,62 @@
+{
+  "description": "Общие параметры, фактически использованные в исходных ноутбуках. Этот файл НЕ переопределяет код (исходники не меняются) — он фиксирует то, что зашито в оригиналах, и служит единой точкой отсчёта для проверки сопоставимости экспериментов.",
+  "repo": {
+    "tpe_root_primary": "drive/MyDrive/content",
+    "tpe_root_fallback": "/content/drive/MyDrive/content",
+    "required_package_dir": "tpe",
+    "imports": [
+      "tpe.optimizer.tpe_optimizer.TPEOptimizer",
+      "tpe.optimizer.random_search.RandomSearch"
+    ]
+  },
+  "library_versions_expected": {
+    "ConfigSpace": "1.2.0",
+    "parzen-estimator": "latest (pip)",
+    "optuna": "latest (pip)",
+    "numpy": "latest (pip)",
+    "matplotlib": "latest (pip)",
+    "scipy": "latest (pip, только fin_5_gTPE)"
+  },
+  "benchmark_functions": ["Sphere(2D)", "Rosenbrock(2D)", "Rastrigin(2D)", "Ackley(2D)"],
+  "bounds": {
+    "Sphere(2D)": [[-5.0, 5.0], [-5.0, 5.0]],
+    "Rosenbrock(2D)": [[-2.0, 2.0], [-1.0, 3.0]],
+    "Rastrigin(2D)": [[-5.12, 5.12], [-5.12, 5.12]],
+    "Ackley(2D)": [[-5.0, 5.0], [-5.0, 5.0]]
+  },
+  "true_minima": {
+    "Sphere(2D)": [0.0, 0.0],
+    "Rosenbrock(2D)": [1.0, 1.0],
+    "Rastrigin(2D)": [0.0, 0.0],
+    "Ackley(2D)": [0.0, 0.0]
+  },
+  "seeds": "range(0, 30)  -> 30 повторов",
+  "max_evals": 100,
+  "base_tpe_kwargs": {
+    "n_ei_candidates": 24,
+    "min_bandwidth_factor": 0.01,
+    "top": 0.2
+  },
+  "noise_sigma_raw": {
+    "Sphere(2D)": 0.005,
+    "Rosenbrock(2D)": 0.05,
+    "Rastrigin(2D)": 0.25,
+    "Ackley(2D)": 0.05
+  },
+  "evaluation_rule": "Алгоритм оптимизирует objective (raw/norm, clean/noisy_y), но ИТОГОВОЕ качество всегда оценивается по raw clean функции (best-so-far по наблюдаемому loss).",
+  "INCONSISTENCIES_FLAGGED": {
+    "n_init": {
+      "01_baseline (fin_fin_1)": 25,
+      "02_noisy_baseline (fin_fin_2)": 10,
+      "03_raw_vs_norm (fin_3)": 10,
+      "04_tpe_wx (fin_4)": 10,
+      "05_gtpe (fin_5)": 10,
+      "comment": "Базовый clean-ноутбук использует n_init=25, остальные 10. Это РАЗНЫЕ стартовые бюджеты -> цифры баз. ноутбука 01 нельзя класть в одну таблицу с 03/04/05 как сравнение 'при прочих равных'."
+    },
+    "thresholds": {
+      "01_baseline / 02_noisy_baseline": {"Sphere": 0.01, "Rosenbrock": 0.1, "Rastrigin": 2.0, "Ackley": 0.5},
+      "03/04/05": {"Sphere": 0.001, "Rosenbrock": 0.05, "Rastrigin": 1.0, "Ackley": 0.5},
+      "comment": "Пороги success_rate/steps в базовых ноутбуках мягче -> success_rate напрямую не сравним между 01/02 и 03/04/05."
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "description": "Реестр экспериментов: какой исходный ноутбук, какой способ изменения ТПЕ проверяется, какие варианты, какие CSV он производит и как они переименовываются в results/raw. Порядок запуска = порядок ключей.",
+  "experiments": [
+    {
+      "id": "01_baseline_clean",
+      "source_notebook": "fin_fin_1 (2).ipynb",
+      "title": "Baseline (clean): random vs repo-TPE(no_w) vs Optuna",
+      "tpe_modification": "НЕТ (контрольная точка). Чистый TPE без w(x), без нормализации, без шума.",
+      "variants": ["random", "no_w", "optuna"],
+      "n_init": 25,
+      "produces_csv": ["results/01_baseline_summary_clean.csv", "results/01_baseline_iteration_history_clean.csv"],
+      "harvest_as": ["01_baseline_summary_clean.csv", "01_baseline_history_clean.csv"],
+      "role": "baseline"
+    },
+    {
+      "id": "02_baseline_noisy",
+      "source_notebook": "fin_fin_2 (1).ipynb",
+      "title": "Noisy-y baseline: random/no_w/optuna на clean и noisy_y",
+      "tpe_modification": "НЕТ. Проверяется чувствительность БАЗОВОГО TPE к шуму в y (мотивация для w(x)/gTPE).",
+      "variants": ["random_clean", "no_w_clean", "optuna_clean", "random_noisy_y", "no_w_noisy_y", "optuna_noisy_y"],
+      "n_init": 10,
+      "produces_csv": ["results/03_noisy_y_baseline_summary.csv"],
+      "harvest_as": ["02_noisy_baseline_summary.csv"],
+      "role": "baseline / sensitivity"
+    },
+    {
+      "id": "03_raw_vs_norm",
+      "source_notebook": "fin_3_raw_vs_norm_METRICS_VISIBLE_FIXED_2 (1).ipynb",
+      "title": "Raw vs Normalized objective (под clean и noisy_y)",
+      "tpe_modification": "МАСШТАБИРОВАНИЕ ЦЕЛЕВОЙ ФУНКЦИИ: f_norm = (f_raw - f_min)/(f_max - f_min).",
+      "variants": ["random", "no_w", "optuna"],
+      "modes": ["raw_clean", "norm_clean", "raw_noisy_y", "norm_noisy_y"],
+      "n_init": 10,
+      "produces_csv": [
+        "results/04_raw_vs_normalized_summary_clean.csv",
+        "results/04_raw_vs_normalized_comparison_clean.csv",
+        "results/04_raw_vs_normalized_iteration_history_clean.csv"
+      ],
+      "harvest_as": [
+        "03_raw_vs_norm_summary.csv",
+        "03_raw_vs_norm_comparison.csv",
+        "03_raw_vs_norm_history.csv"
+      ],
+      "role": "tpe_method_1 (normalization)"
+    },
+    {
+      "id": "04_tpe_wx_gradient",
+      "source_notebook": "fin_4_with_w_x.ipynb",
+      "title": "repo-TPE + градиентный множитель w(x) (weight_fn)",
+      "tpe_modification": "ВЕС w(x) в KDE репозиторного TPEOptimizer: w = clip(1 + 0.2*z, 0.8, 1.2), z = f(||grad||). 4 варианта формы.",
+      "variants": ["random", "no_w", "grad_smooth", "grad_smooth_inv", "grad_sign_like", "grad_sign_like_inv", "optuna"],
+      "modes": ["raw_clean", "norm_clean", "raw_noisy_y", "norm_noisy_y"],
+      "n_init": 10,
+      "produces_csv": ["results/tpe_grad_weights_summary_full.csv", "results/tpe_grad_weights_summary_visible.csv"],
+      "harvest_as": ["04_tpe_wx_summary_full.csv", "04_tpe_wx_summary_visible.csv"],
+      "role": "tpe_method_2 (gradient weight w(x))",
+      "single_factor_clean_comparison": "no_w vs grad_* при фиксированных (scale_type, data_type) — это корректное сравнение одного фактора (только weight_fn)."
+    },
+    {
+      "id": "05_gtpe",
+      "source_notebook": "fin_5_gTPE.ipynb",
+      "title": "Всё из 04 + внешний baseline gTPE (GradientAwareTPE + GP-reranking)",
+      "tpe_modification": "Отдельная самостоятельная реализация TPE: gradient-weighted KDE + GP-переранжирование кандидатов (gradient_mode='weight', use_gp_reranking=True).",
+      "variants": ["random", "no_w", "grad_smooth", "grad_smooth_inv", "grad_sign_like", "grad_sign_like_inv", "optuna", "gTPE"],
+      "modes": ["raw_clean", "norm_clean", "raw_noisy_y", "norm_noisy_y"],
+      "n_init": 10,
+      "produces_csv": ["results/tpe_grad_weights_summary_full.csv", "results/tpe_grad_weights_summary_visible.csv"],
+      "harvest_as": ["05_gtpe_summary_full.csv", "05_gtpe_summary_visible.csv"],
+      "role": "tpe_method_3 (gTPE = gradient + GP)",
+      "WARNING": "gTPE отличается от repo-TPE сразу по МНОГИМ осям (своя KDE, GP-reranking, веса) -> разницу нельзя приписать одному фактору. Это сравнение реализаций, а не ablation."
+    }
+  ],
+  "metrics_collected": [
+    "success_rate_%",
+    "steps_mean", "steps_var", "steps_median",
+    "final_dist_x_mean/var/median  (||x_best - x*||)",
+    "final_dist_y_mean/var/median  (raw clean f(x_best))"
+  ]
+}
