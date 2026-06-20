@@ -112,6 +112,24 @@ def results_file(d, summ, sig, rn, rob, abl, cfg):
     L.append(mdtab(full)); L.append("")
     L.append("Дополнительно в `results/tables/`: per_seed_final.csv, iteration_history.csv, "
              "raw_vs_norm_comparison.csv, significance_tests.csv, significance_robust.csv, all_results.xlsx.")
+    L.append("")
+    L.append("## 7. Изменения относительно базовой версии (ноутбуки fin_*)")
+    L.append("Полный разбор с доказательствами — `docs/CHANGES_VS_ORIGINAL.md`. Кратко:")
+    L.append("- **Исправлен дефект градиента** в fin_4/fin_5: функция веса считала ‖∇f‖ в точке (x, 0) "
+             "(проекция `_as_2d_points`, x1=0), а не в реальной точке кандидата. У меня — в реальной 2D-точке.")
+    L.append("- **Одна реализация TPE** (`src/tpe_study/tpe.py`) вместо внешней библиотеки и 5 ноутбуков: "
+             "все модификации — флаги одного класса (честный ablation «один фактор»).")
+    L.append("- **Внутри TPE:** GP-переранжирование, взвешивание наблюдений 1/‖∇f‖ и refinement портированы "
+             "из fin_5 и переписаны; prior-компонента KDE, адаптивная ширина ядра, единый класс с флагами и "
+             "векторизация — добавлены мной.")
+    L.append("- **Refinement честен по бюджету:** шаги по оракулу ∇f без доп. оценок objective (1 оценка/trial); "
+             "в fin_5 refine дополнительно ОЦЕНИВАЛ предложенные точки (тратил вызовы).")
+    L.append("- **Систематические стат-тесты:** парный Уилкоксон + Холм + робастность (4 теста × 3 поправки). "
+             "В оригиналах — только частично в fin_5.")
+    L.append("- **Оценка всегда по raw clean**, парный шум по (функция, seed), классификация black-box/white-box.")
+    L.append("- **Воспроизводимость:** PYTHONHASHSEED=0, фикс. seeds, детерминированный f_max, 23 теста pytest; seeds 30→50.")
+    L.append("- **Сохранено 1-в-1:** функции и их градиенты, 4 формы веса и формула w=clip(1+0.2·z,0.8,1.2), "
+             "нормализация цели, гиперпараметры (n_init=10, gamma=0.2, n_candidates=24, max_evals=100).")
     (ROOT / "docs" / "FACTS_RESULTS.md").write_text("\n".join(L))
     print("wrote docs/FACTS_RESULTS.md")
 
