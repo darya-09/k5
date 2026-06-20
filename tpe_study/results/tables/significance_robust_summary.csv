@@ -1,0 +1,9 @@
+algorithm,final_dist_y|wilcoxon|raw,final_dist_y|wilcoxon|holm,final_dist_y|wilcoxon|bh,final_dist_y|ttest|raw,final_dist_y|ttest|holm,final_dist_y|ttest|bh,final_dist_y|sign|raw,final_dist_y|sign|holm,final_dist_y|sign|bh,final_dist_y|perm|raw,final_dist_y|perm|holm,final_dist_y|perm|bh,final_dist_x|wilcoxon|raw,final_dist_x|wilcoxon|holm,final_dist_x|wilcoxon|bh,final_dist_x|ttest|raw,final_dist_x|ttest|holm,final_dist_x|ttest|bh,final_dist_x|sign|raw,final_dist_x|sign|holm,final_dist_x|sign|bh,final_dist_x|perm|raw,final_dist_x|perm|holm,final_dist_x|perm|bh
+optuna,4,2,4,4,0,4,4,0,4,4,0,4,4,4,4,4,4,4,4,4,4,4,4,4
+random,2,0,0,4,0,0,0,0,0,4,0,0,4,2,4,4,4,4,4,4,4,4,4,4
+tpe_gp,6,4,5,6,0,3,5,1,3,8,3,6,6,2,5,8,2,4,4,1,2,8,2,5
+tpe_gp_w,5,3,4,4,2,2,4,2,3,5,4,4,5,2,3,5,2,4,3,2,2,5,2,5
+tpe_w_sign,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+tpe_w_sign_inv,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+tpe_w_smooth,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0
+tpe_w_smooth_inv,4,0,2,0,0,0,2,0,0,0,0,0,4,0,2,0,0,0,2,0,0,0,0,0

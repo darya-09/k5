@@ -32,6 +32,7 @@ from tpe_study.experiment import ALGORITHMS, THRESHOLDS, run_cell     # noqa: E4
 from tpe_study.functions import BENCHMARKS                            # noqa: E402
 from tpe_study.metrics import steps_to_threshold                      # noqa: E402
 from tpe_study.stats import paired_significance_vs_baseline           # noqa: E402
+from tpe_study.stats_robust import robust_significance                 # noqa: E402
 from tpe_study import plots                                           # noqa: E402
 
 
@@ -106,6 +107,12 @@ def main():
     sig.to_csv(tables / "significance_tests.csv", index=False)
     n_sig = int(sig["significant_holm"].sum()) if len(sig) else 0
     print(f"Стат-тестов: {len(sig)}, значимых (Holm, p<0.05): {n_sig}")
+
+    # РОБАСТНОСТЬ к выбору теста: 4 теста × 3 поправки × 2 метрики.
+    det, robust_summary = robust_significance(per_seed_df, baseline="tpe")
+    det.to_csv(tables / "significance_robust.csv", index=False)
+    robust_summary.to_csv(tables / "significance_robust_summary.csv", index=False)
+    print(f"Робастных тестов посчитано: {len(det)} строк.")
 
     print(f"\nГotovo за {time.time()-t0:.1f}s. Строк: {len(df)}.")
     print("Таблицы:", tables)

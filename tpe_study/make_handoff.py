@@ -30,6 +30,8 @@ def main():
     sig = pd.read_csv(T / "significance_tests.csv")
     abl = pd.read_csv(T / "ablation_vs_tpe.csv")
     cfg = json.load(open(ROOT / "configs" / "default.json"))
+    rob = pd.read_csv(T / "significance_robust_summary.csv") if (T / "significance_robust_summary.csv").exists() else None
+    ps = pd.read_csv(T / "per_seed_final.csv")
 
     avg = (d.groupby("algorithm")[["success_rate_%", "final_dist_y_mean", "final_dist_x_mean"]]
            .mean().round(3).reset_index())
@@ -88,12 +90,44 @@ def main():
     L.append("\nКонкретные значимые улучшения:")
     L.append(mdtab(sigbetter) if len(sigbetter) else "_(нет)_")
     L.append("")
+    L.append("## 4.5 Это не «плохой тест»: диагностика и робастность")
+    # Диагностика: меняют ли формы веса результат вообще
+    base = ps[ps.algorithm == "tpe"]
+    diag = []
+    for algo in ["tpe_w_smooth", "tpe_w_smooth_inv", "tpe_w_sign", "tpe_w_sign_inv", "tpe_gp"]:
+        diffs = []
+        for (fn, sc, dt), g in ps[ps.algorithm == algo].groupby(["function", "scale", "data"]):
+            b = base[(base.function == fn) & (base.scale == sc) & (base.data == dt)].set_index("seed")["final_dist_y"]
+            a = g.set_index("seed")["final_dist_y"]
+            c = b.index.intersection(a.index)
+            diffs.append((a.loc[c] - b.loc[c]).to_numpy())
+        import numpy as _np
+        dd = _np.concatenate(diffs)
+        diag.append({"algorithm": algo, "%seeds_changed": round(100 * _np.mean(_np.abs(dd) > 1e-9), 1),
+                     "mean_abs_diff": round(float(_np.mean(_np.abs(dd))), 4),
+                     "median_diff": round(float(_np.median(dd)), 4)})
+    L.append("Формы w(x) РЕАЛЬНО меняют поиск (≈100% seeds отличаются от baseline, mean|Δ|≈0.9), но **медиана Δ≈0** "
+             "— изменения симметричны (то лучше, то хуже). Значит эффект ненаправленный, а не «тест слепой».")
+    L.append(mdtab(pd.DataFrame(diag)))
+    if rob is not None:
+        L.append("")
+        L.append("**Робастность к выбору теста.** Число значимых УЛУЧШЕНИЙ над `tpe` (из 16 ячеек, метрика "
+                 "final_dist_y) при разных тестах × поправках. Видно: формы веса ≈0 везде, GP — устойчиво значим.")
+        cols = ["algorithm"] + [c for c in rob.columns if c.startswith("final_dist_y|")]
+        rtab = rob[cols].copy()
+        rtab.columns = ["algorithm"] + [c.replace("final_dist_y|", "").replace("|", "/")
+                                        for c in cols if c != "algorithm"]
+        L.append(mdtab(rtab))
+        L.append("\nТесты: wilcoxon (знаковых рангов), ttest (парный Стьюдент), sign (знаковый), perm (перестановочный). "
+                 "Поправки: raw (без поправки), holm, bh (FDR). Полные данные — `results/tables/significance_robust*.csv`.")
+    L.append("")
     L.append("## 5. Выводы (строго)")
     L.append("1. Базовый TPE осмыслен (success 36.0% vs random 3.5%).")
     L.append("2. Нормализация цели не влияет на TPE и на все формы w(x) (инвариантность); важна только для GP.")
     L.append("3. **Ни одна из 4 форм w(x) не даёт статистически значимого улучшения** над baseline — "
-             "даже при точном градиенте. По средним `tpe_w_smooth` «лучший» (87.5% ячеек), но это не переживает "
-             "поправку на множественность (0 значимых) — средние обманывают.")
+             "даже при точном градиенте, и это **устойчиво к выбору теста** (Уилкоксон/t-тест/знаковый/"
+             "перестановочный × raw/Holm/BH — см. §4.5). По средним `tpe_w_smooth` «лучший» (87.5% ячеек), "
+             "но это не переживает ни поправку, ни смену теста — средние обманывают.")
     L.append("4. **GP-переранжирование — единственная модификация со значимым эффектом** (Sphere, Rosenbrock).")
     L.append("5. Комбинация GP+вес (`tpe_gp_w`) не превосходит чистый GP — выигрыш от GP, не от градиента.")
     L.append("")

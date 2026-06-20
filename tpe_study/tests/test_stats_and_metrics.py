@@ -40,3 +40,19 @@ def test_paired_significance_detects_clear_difference():
     sig = paired_significance_vs_baseline(pd.DataFrame(rows))
     r = sig[sig.algorithm == "tpe_gp"].iloc[0]
     assert r["direction"] == "better" and bool(r["significant_holm"])
+
+
+def test_bh_correction_and_robust_detects_clear_diff():
+    import numpy as np, pandas as pd
+    from tpe_study.stats_robust import bh_correction, robust_significance
+    adj, rej = bh_correction([0.001, 0.5, 0.9])
+    assert adj[0] <= adj[1] <= adj[2] and adj[0] < 0.05
+    rng = np.random.default_rng(0); rows = []
+    for s in range(30):
+        rows.append(dict(function="F", scale="raw", data="clean", algorithm="tpe",
+                         seed=s, final_dist_y=1.0 + rng.normal(0, 0.02), final_dist_x=0.0))
+        rows.append(dict(function="F", scale="raw", data="clean", algorithm="tpe_gp",
+                         seed=s, final_dist_y=0.5 + rng.normal(0, 0.02), final_dist_x=0.0))
+    det, summ = robust_significance(pd.DataFrame(rows), metrics=("final_dist_y",))
+    r = det[(det.algorithm == "tpe_gp") & (det.metric == "final_dist_y")].iloc[0]
+    assert r["median_delta"] < 0 and r["p_wilcoxon"] < 0.05 and bool(r["wilcoxon_bh_sig"])
