@@ -186,6 +186,12 @@ class TPE:
     obs_gradient_weight: bool = False
     gp_rerank: bool = False
     gp_beta: float = 0.2
+    # refine: локальный градиентный спуск по ВЫБРАННОМУ кандидату перед его оценкой
+    #   (механизм gradient_mode="refine" из fin_5). Использует оракул grad_fn; БЕЗ доп. оценок
+    #   objective (шаги детерминированы по точному градиенту) -> бюджет честный: 1 оценка/trial.
+    refine_steps: int = 0
+    refine_step_size: float = 0.2
+    refine_decay: float = 0.5
     # --- состояние ---
     history_x: List[Array] = field(default_factory=list)
     history_y: List[float] = field(default_factory=list)
@@ -198,6 +204,8 @@ class TPE:
         assert self.cand_weight_shape in (None, "smooth", "smooth_inv", "sign", "sign_inv")
         if self.cand_weight_shape is not None and self.grad_fn is None:
             raise ValueError("cand_weight_shape требует grad_fn (оракул градиента)")
+        if self.refine_steps > 0 and self.grad_fn is None:
+            raise ValueError("refine_steps>0 требует grad_fn (оракул градиента)")
         if self.gp_rerank:
             self.gp = SimpleGP()
 
@@ -220,8 +228,24 @@ class TPE:
     # ---- внутреннее ----
     def _ask(self) -> Array:
         if len(self.history_y) < self.n_init:
-            return self._sample_uniform()
-        return self._sample_tpe()
+            x = self._sample_uniform()
+        else:
+            x = self._sample_tpe()
+        return self._refine(x) if self.refine_steps > 0 else x
+
+    def _refine(self, x: Array) -> Array:
+        """Локальный градиентный спуск по оракулу: x <- clip(x - step*∇f/‖∇f‖), step*=decay."""
+        x = np.asarray(x, float).copy()
+        step = self.refine_step_size
+        for _ in range(self.refine_steps):
+            g = np.asarray(self.grad_fn(x), float)
+            n = np.linalg.norm(g)
+            if n < 1e-12:
+                break
+            x = x - step * g / n
+            x = np.array([min(max(x[d], lo), hi) for d, (lo, hi) in enumerate(self.bounds)])
+            step *= self.refine_decay
+        return x
 
     def _sample_uniform(self) -> Array:
         return np.array([self.rng.uniform(lo, hi) for lo, hi in self.bounds])

@@ -18,8 +18,10 @@ ALGO_STYLE = {
     "tpe_w_smooth_inv": ("tab:cyan",   "-"),
     "tpe_w_sign":       ("tab:red",    "-"),
     "tpe_w_sign_inv":   ("tab:orange", "-"),
+    "tpe_refine":       ("tab:olive",  "-"),
     "tpe_gp":           ("tab:green",  "-"),
     "tpe_gp_w":         ("tab:brown",  "-"),
+    "tpe_gp_refine":    ("tab:pink",   "-"),
     "optuna":           ("tab:purple", "-."),
 }
 

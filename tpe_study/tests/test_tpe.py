@@ -69,3 +69,18 @@ def test_normalization_invariance_for_plain_tpe(name):
         build_objective(b, "norm", "clean", 3, fmax), 50)
     # одинаковая траектория по x (нормализация y не меняет ранги -> не меняет выбор)
     assert np.allclose(raw["x_history"], norm["x_history"], atol=1e-9)
+
+
+def test_refine_reduces_convex_objective():
+    # Локальный градиентный refine должен снижать выпуклую функцию (Sphere) от стартовой точки.
+    import numpy as np
+    from tpe_study.tpe import TPE
+    from tpe_study.functions import BENCHMARKS
+    b = BENCHMARKS["Sphere"]
+    opt = TPE(bounds=b.bounds, refine_steps=5, refine_step_size=0.5, refine_decay=0.8,
+              grad_fn=b.grad, seed=0)
+    x0 = np.array([3.0, -4.0])
+    x1 = opt._refine(x0)
+    assert b.f(x1) < b.f(x0)
+    for d, (lo, hi) in enumerate(b.bounds):
+        assert lo - 1e-9 <= x1[d] <= hi + 1e-9

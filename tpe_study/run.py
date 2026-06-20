@@ -58,6 +58,7 @@ def main():
 
     rows = []
     per_seed = []                     # по-seed финальные значения -> нужны для парных стат-тестов
+    all_curves = {}                   # (fn,scale,data,algo) -> список кривых по seeds (для истории)
     t0 = time.time()
     for fname in cfg["functions"]:
         bench = BENCHMARKS[fname]
@@ -69,6 +70,7 @@ def main():
                     row, curves = run_cell(bench, scale, data, algo, seeds, cfg, f_max[fname])
                     rows.append(row)
                     curves_by_algo[algo] = curves
+                    all_curves[(fname, scale, data, algo)] = curves
                     for c in curves:          # сохраняем финал каждого seed
                         per_seed.append({
                             "function": fname, "scale": scale, "data": data,
@@ -93,6 +95,18 @@ def main():
     per_seed_df = pd.DataFrame(per_seed)
     per_seed_df.to_csv(tables / "per_seed_final.csv", index=False)
 
+    # История по итерациям: среднее±std кривых dist_y/dist_x по seeds (для графиков и проверки).
+    iter_rows = []
+    for (fn, sc, dt, algo), curves in all_curves.items():
+        Y = np.vstack([c["dist_y"] for c in curves])
+        X = np.vstack([c["dist_x"] for c in curves])
+        for it in range(Y.shape[1]):
+            iter_rows.append({"function": fn, "scale": sc, "data": dt, "algorithm": algo,
+                              "iteration": it + 1,
+                              "dist_y_mean": float(Y[:, it].mean()), "dist_y_std": float(Y[:, it].std()),
+                              "dist_x_mean": float(X[:, it].mean()), "dist_x_std": float(X[:, it].std())})
+    pd.DataFrame(iter_rows).to_csv(tables / "iteration_history.csv", index=False)
+
     # Удобная сводка: только ключевые метрики.
     key = df[["function", "scale", "data", "algorithm", "success_rate_%",
               "steps_mean", "final_dist_y_mean", "final_dist_x_mean"]]
@@ -101,6 +115,9 @@ def main():
     # Ablation-таблица: каждая модификация против baseline `tpe` при тех же (function,scale,data).
     abl = _ablation(df)
     abl.to_csv(tables / "ablation_vs_tpe.csv", index=False)
+
+    # Сравнение raw vs norm (как df_compare в fin_3): delta(norm-raw) по функции/алгоритму/данным.
+    _raw_vs_norm(df).to_csv(tables / "raw_vs_norm_comparison.csv", index=False)
 
     # СТАТ-ТЕСТЫ значимости (парный Уилкоксон vs baseline `tpe` + поправка Холма).
     sig = paired_significance_vs_baseline(per_seed_df, metric="final_dist_y", baseline="tpe")
@@ -117,6 +134,21 @@ def main():
     print(f"\nГotovo за {time.time()-t0:.1f}s. Строк: {len(df)}.")
     print("Таблицы:", tables)
     print("Графики:", figs)
+
+
+def _raw_vs_norm(df: pd.DataFrame) -> pd.DataFrame:
+    """Side-by-side raw vs norm по final_dist_y (как df_compare в fin_3). delta = norm - raw."""
+    out = []
+    for (fn, algo, dt), g in df.groupby(["function", "algorithm", "data"]):
+        raw = g[g.scale == "raw"]; norm = g[g.scale == "norm"]
+        if raw.empty or norm.empty:
+            continue
+        r = float(raw.final_dist_y_mean.iloc[0]); n = float(norm.final_dist_y_mean.iloc[0])
+        out.append({"function": fn, "algorithm": algo, "data": dt,
+                    "raw_final_dist_y": r, "norm_final_dist_y": n,
+                    "delta_norm_minus_raw": n - r,
+                    "identical": bool(abs(n - r) < 1e-9)})
+    return pd.DataFrame(out)
 
 
 def _ablation(df: pd.DataFrame) -> pd.DataFrame:

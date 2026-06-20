@@ -40,8 +40,10 @@ ALGORITHMS = [
     "tpe_w_smooth_inv",   # вес КАНДИДАТА w(x)=-tanh, предпочтение МАЛОМУ ‖∇f‖
     "tpe_w_sign",         # вес КАНДИДАТА w(x)=сигмоида·5, большому ‖∇f‖
     "tpe_w_sign_inv",     # вес КАНДИДАТА, малому ‖∇f‖
+    "tpe_refine",         # локальный градиентный шаг по кандидату (механизм refine из fin_5)
     "tpe_gp",             # GP-переранжирование
     "tpe_gp_w",           # GP + взвешивание НАБЛЮДЕНИЙ по 1/‖∇f‖ (механизм gТPE из fin_5)
+    "tpe_gp_refine",      # GP + refine (полный аналог gТPE weight+refine+GP по смыслу)
     "optuna",
 ]
 
@@ -65,8 +67,10 @@ def _run_one(algo: str, objective, bench: Benchmark, n_trials: int,
         "tpe_w_smooth_inv": dict(cand_weight_shape="smooth_inv", grad_fn=gfn),
         "tpe_w_sign":       dict(cand_weight_shape="sign", grad_fn=gfn),
         "tpe_w_sign_inv":   dict(cand_weight_shape="sign_inv", grad_fn=gfn),
+        "tpe_refine":       dict(refine_steps=2, grad_fn=gfn),
         "tpe_gp":           dict(gp_rerank=True),
         "tpe_gp_w":         dict(gp_rerank=True, obs_gradient_weight=True),
+        "tpe_gp_refine":    dict(gp_rerank=True, refine_steps=2, grad_fn=gfn),
     }[algo]
     opt = TPE(bounds=bounds, n_init=n_init, gamma=gamma, n_candidates=n_candidates,
               min_bw_frac=min_bw_frac, seed=seed, **flags)
