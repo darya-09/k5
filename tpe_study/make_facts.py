@@ -113,7 +113,27 @@ def results_file(d, summ, sig, rn, rob, abl, cfg):
     L.append("Дополнительно в `results/tables/`: per_seed_final.csv, iteration_history.csv, "
              "raw_vs_norm_comparison.csv, significance_tests.csv, significance_robust.csv, all_results.xlsx.")
     L.append("")
-    L.append("## 7. Изменения относительно базовой версии (ноутбуки fin_*)")
+    L.append("## 7. До/после модификаций на ЗАШУМЛЁННЫХ функциях (data=noisy_y)")
+    L.append("«До» = baseline `tpe`, «после» = модификация, на тех же (функция, scale, seed). "
+             "Качество — final_dist_y по raw clean; improve_% = (tpe−algo)/tpe; "
+             "significant_better — парный Уилкоксон + Холм (α=0.05).")
+    nba_s = pd.read_csv(T / "noisy_before_after_summary.csv")
+    nba_s = nba_s.rename(columns={"cells_better_of_8": "лучше_tpe(из 8)",
+                                  "cells_significant_better": "значимо_лучше(из 8)",
+                                  "mean_improve_pct": "сред_улучш_%",
+                                  "median_improve_pct": "медиана_улучш_%"})
+    L.append("### 7a. Сводка по модификациям (8 ячеек = 4 функции × 2 scale, только шум)")
+    L.append(mdtab(nba_s)); L.append("")
+    nba = pd.read_csv(T / "noisy_before_after.csv")
+    win = nba[nba.significant_better][["function", "scale", "algorithm",
+                                       "tpe_median_dist_y", "algo_median_dist_y",
+                                       "improve_%", "p_holm"]]
+    L.append("### 7b. Ячейки со ЗНАЧИМЫМ улучшением над `tpe` на шуме")
+    L.append(mdtab(win) if len(win) else "_(нет)_"); L.append("")
+    L.append("Полные данные: `results/tables/noisy_before_after.csv` (80 ячеек) и "
+             "`noisy_before_after_summary.csv`.")
+    L.append("")
+    L.append("## 8. Изменения относительно базовой версии (ноутбуки fin_*)")
     L.append("Полный разбор с доказательствами — `docs/CHANGES_VS_ORIGINAL.md`. Кратко:")
     L.append("- **Исправлен дефект градиента** в fin_4/fin_5: функция веса считала ‖∇f‖ в точке (x, 0) "
              "(проекция `_as_2d_points`, x1=0), а не в реальной точке кандидата. У меня — в реальной 2D-точке.")

@@ -28,7 +28,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from tpe_study.experiment import ALGORITHMS, THRESHOLDS, run_cell     # noqa: E402
+from tpe_study.experiment import ALGO_FAMILY, ALGORITHMS, THRESHOLDS, run_cell   # noqa: E402
 from tpe_study.functions import BENCHMARKS                            # noqa: E402
 from tpe_study.metrics import steps_to_threshold                      # noqa: E402
 from tpe_study.stats import paired_significance_vs_baseline           # noqa: E402
@@ -125,6 +125,13 @@ def main():
     n_sig = int(sig["significant_holm"].sum()) if len(sig) else 0
     print(f"Стат-тестов: {len(sig)}, значимых (Holm, p<0.05): {n_sig}")
 
+    # ДО/ПОСЛЕ модификаций на ЗАШУМЛЁННЫХ функциях (фокусный срез data=noisy_y).
+    nba_detail, nba_summary = noisy_before_after(per_seed_df, sig, baseline="tpe")
+    nba_detail.to_csv(tables / "noisy_before_after.csv", index=False)
+    nba_summary.to_csv(tables / "noisy_before_after_summary.csv", index=False)
+    print(f"До/после на шуме: {len(nba_detail)} ячеек, "
+          f"значимо лучше tpe: {int(nba_detail['significant_better'].sum())}.")
+
     # РОБАСТНОСТЬ к выбору теста: 4 теста × 3 поправки × 2 метрики.
     det, robust_summary = robust_significance(per_seed_df, baseline="tpe")
     det.to_csv(tables / "significance_robust.csv", index=False)
@@ -134,6 +141,61 @@ def main():
     print(f"\nГotovo за {time.time()-t0:.1f}s. Строк: {len(df)}.")
     print("Таблицы:", tables)
     print("Графики:", figs)
+
+
+def noisy_before_after(per_seed_df: pd.DataFrame, sig_df: pd.DataFrame,
+                       baseline: str = "tpe") -> "tuple[pd.DataFrame, pd.DataFrame]":
+    """До/после ЭФФЕКТА МОДИФИКАЦИЙ на ЗАШУМЛЁННЫХ функциях (data=noisy_y).
+
+    «До»  = baseline `tpe` (без модификаций), «после» = каждая модификация — на тех же
+    (функция, scale, seed) -> парное сравнение. Качество = final_dist_y по raw clean.
+    Возвращает (детальную таблицу по ячейкам, сводку по алгоритмам).
+    """
+    d = per_seed_df[per_seed_df["data"] == "noisy_y"]
+
+    def _agg(g):
+        finals = g["final_dist_y"].astype(float)
+        return pd.Series({
+            "median_dist_y": float(finals.median()),
+            "mean_dist_y": float(finals.mean()),
+            "success_%": 100.0 * g["steps"].notna().sum() / len(g),
+        })
+
+    stats = d.groupby(["function", "scale", "algorithm"]).apply(_agg).reset_index()
+    base = stats[stats.algorithm == baseline].set_index(["function", "scale"])
+    sig = sig_df[sig_df.data == "noisy_y"].set_index(["function", "scale", "algorithm"])
+
+    rows = []
+    for _, r in stats[stats.algorithm != baseline].iterrows():
+        key = (r["function"], r["scale"])
+        if key not in base.index:
+            continue
+        b = base.loc[key]
+        before, after = float(b["median_dist_y"]), float(r["median_dist_y"])
+        improve = 100.0 * (before - after) / before if before > 1e-12 else float("nan")
+        skey = (r["function"], r["scale"], r["algorithm"])
+        s = sig.loc[skey] if skey in sig.index else None
+        rows.append({
+            "function": r["function"], "scale": r["scale"], "algorithm": r["algorithm"],
+            "family": ALGO_FAMILY.get(r["algorithm"], ""),
+            "tpe_median_dist_y": before, "algo_median_dist_y": after,
+            "delta_median(algo-tpe)": after - before, "improve_%": improve,
+            "tpe_success_%": float(b["success_%"]), "algo_success_%": float(r["success_%"]),
+            "n_pairs": int(s["n_pairs"]) if s is not None else 0,
+            "p_holm": float(s["p_holm"]) if s is not None else float("nan"),
+            "significant_better": bool(s["significant_and_better"]) if s is not None else False,
+        })
+    detail = pd.DataFrame(rows).sort_values(["function", "scale", "algorithm"]).reset_index(drop=True)
+
+    # Сводка по алгоритму: в скольких из 8 (функция×scale) ячеек он лучше/значимо лучше на шуме.
+    summ = (detail.assign(better=detail["delta_median(algo-tpe)"] < 0)
+            .groupby(["algorithm", "family"])
+            .agg(cells_better_of_8=("better", "sum"),
+                 cells_significant_better=("significant_better", "sum"),
+                 mean_improve_pct=("improve_%", "mean"),
+                 median_improve_pct=("improve_%", "median"))
+            .reset_index().sort_values("cells_significant_better", ascending=False))
+    return detail, summ
 
 
 def _raw_vs_norm(df: pd.DataFrame) -> pd.DataFrame:

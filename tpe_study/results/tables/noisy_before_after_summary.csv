@@ -1,0 +1,11 @@
+algorithm,family,cells_better_of_8,cells_significant_better,mean_improve_pct,median_improve_pct
+tpe_gp_refine,white-box(∇f-descent),8,7,74.65663660577049,78.29841020657472
+tpe_refine,white-box(∇f-descent),8,6,71.14914803947539,73.20349746798351
+tpe_gp,black-box,5,3,27.199858122903237,46.50289559109629
+tpe_gp_w,white-box(∇f),5,3,18.638446008529737,29.9866535297519
+optuna,black-box,4,2,24.845582601400316,29.858195703441755
+random,black-box,2,0,-663.9471308832641,-86.33335424386551
+tpe_w_sign,white-box(∇f),2,0,-11.739058368077618,-40.53721758860246
+tpe_w_sign_inv,white-box(∇f),4,0,26.05419911630969,24.103117532444433
+tpe_w_smooth,white-box(∇f),4,0,-10.188220859199868,-1.0917789105455764
+tpe_w_smooth_inv,white-box(∇f),4,0,19.906888384567516,17.4950070312588

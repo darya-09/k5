@@ -316,7 +316,50 @@
 
 Дополнительно в `results/tables/`: per_seed_final.csv, iteration_history.csv, raw_vs_norm_comparison.csv, significance_tests.csv, significance_robust.csv, all_results.xlsx.
 
-## 7. Изменения относительно базовой версии (ноутбуки fin_*)
+## 7. До/после модификаций на ЗАШУМЛЁННЫХ функциях (data=noisy_y)
+«До» = baseline `tpe`, «после» = модификация, на тех же (функция, scale, seed). Качество — final_dist_y по raw clean; improve_% = (tpe−algo)/tpe; significant_better — парный Уилкоксон + Холм (α=0.05).
+### 7a. Сводка по модификациям (8 ячеек = 4 функции × 2 scale, только шум)
+| algorithm | family | лучше_tpe(из 8) | значимо_лучше(из 8) | сред_улучш_% | медиана_улучш_% |
+|---|---|---|---|---|---|
+| tpe_gp_refine | white-box(∇f-descent) | 8 | 7 | 74.66 | 78.3 |
+| tpe_refine | white-box(∇f-descent) | 8 | 6 | 71.15 | 73.2 |
+| tpe_gp | black-box | 5 | 3 | 27.2 | 46.5 |
+| tpe_gp_w | white-box(∇f) | 5 | 3 | 18.64 | 29.99 |
+| optuna | black-box | 4 | 2 | 24.85 | 29.86 |
+| random | black-box | 2 | 0 | -663.9 | -86.33 |
+| tpe_w_sign | white-box(∇f) | 2 | 0 | -11.74 | -40.54 |
+| tpe_w_sign_inv | white-box(∇f) | 4 | 0 | 26.05 | 24.1 |
+| tpe_w_smooth | white-box(∇f) | 4 | 0 | -10.19 | -1.092 |
+| tpe_w_smooth_inv | white-box(∇f) | 4 | 0 | 19.91 | 17.5 |
+
+### 7b. Ячейки со ЗНАЧИМЫМ улучшением над `tpe` на шуме
+| function | scale | algorithm | tpe_median_dist_y | algo_median_dist_y | improve_% | p_holm |
+|---|---|---|---|---|---|---|
+| Ackley | norm | tpe_gp_refine | 2.58 | 0.02827 | 98.9 | 0.002601 |
+| Ackley | raw | tpe_gp | 2.58 | 0.08421 | 96.74 | 0.0002287 |
+| Ackley | raw | tpe_gp_refine | 2.58 | 0.02178 | 99.16 | 5.632e-07 |
+| Ackley | raw | tpe_gp_w | 2.58 | 0.07004 | 97.29 | 4.44e-05 |
+| Rastrigin | norm | tpe_gp_refine | 2.03 | 1.044 | 48.6 | 0.02543 |
+| Rastrigin | norm | tpe_refine | 2.03 | 1.01 | 50.26 | 0.003689 |
+| Rastrigin | raw | tpe_refine | 2.03 | 1.01 | 50.26 | 0.003689 |
+| Rosenbrock | norm | optuna | 0.5398 | 0.1872 | 65.32 | 0.001962 |
+| Rosenbrock | norm | tpe_gp_refine | 0.5398 | 0.2682 | 50.32 | 0.01354 |
+| Rosenbrock | norm | tpe_refine | 0.5398 | 0.3267 | 39.48 | 0.03122 |
+| Rosenbrock | raw | optuna | 0.5398 | 0.1872 | 65.32 | 0.001962 |
+| Rosenbrock | raw | tpe_gp | 0.5398 | 0.229 | 57.59 | 0.0001162 |
+| Rosenbrock | raw | tpe_gp_refine | 0.5398 | 0.1987 | 63.2 | 5.055e-05 |
+| Rosenbrock | raw | tpe_gp_w | 0.5398 | 0.245 | 54.62 | 0.005576 |
+| Rosenbrock | raw | tpe_refine | 0.5398 | 0.3267 | 39.48 | 0.03122 |
+| Sphere | norm | tpe_gp_refine | 0.009966 | 0.0006578 | 93.4 | 2.924e-10 |
+| Sphere | norm | tpe_refine | 0.009966 | 0.0003843 | 96.14 | 2.505e-10 |
+| Sphere | raw | tpe_gp | 0.009966 | 0.002328 | 76.64 | 0.0003079 |
+| Sphere | raw | tpe_gp_refine | 0.009966 | 0.000392 | 96.07 | 6.455e-10 |
+| Sphere | raw | tpe_gp_w | 0.009966 | 0.002158 | 78.35 | 0.001171 |
+| Sphere | raw | tpe_refine | 0.009966 | 0.0003843 | 96.14 | 2.505e-10 |
+
+Полные данные: `results/tables/noisy_before_after.csv` (80 ячеек) и `noisy_before_after_summary.csv`.
+
+## 8. Изменения относительно базовой версии (ноутбуки fin_*)
 Полный разбор с доказательствами — `docs/CHANGES_VS_ORIGINAL.md`. Кратко:
 - **Исправлен дефект градиента** в fin_4/fin_5: функция веса считала ‖∇f‖ в точке (x, 0) (проекция `_as_2d_points`, x1=0), а не в реальной точке кандидата. У меня — в реальной 2D-точке.
 - **Одна реализация TPE** (`src/tpe_study/tpe.py`) вместо внешней библиотеки и 5 ноутбуков: все модификации — флаги одного класса (честный ablation «один фактор»).
