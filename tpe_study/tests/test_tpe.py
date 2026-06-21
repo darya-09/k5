@@ -71,6 +71,35 @@ def test_normalization_invariance_for_plain_tpe(name):
     assert np.allclose(raw["x_history"], norm["x_history"], atol=1e-9)
 
 
+def test_prior_keeps_exploration_in_tail():
+    """prior-компонента держит ненулевую плотность вдали от схлопнувшегося кластера."""
+    # При узких (фиксированных) ядрах без prior хвост схлопывается; prior держит плотность.
+    s = np.array([2.00, 2.01, 1.99])           # очень плотный кластер «хороших»
+    far = -3.0                                  # далеко от кластера
+    no_prior = WeightedKDE1D(s, -5, 5, use_prior=False, adaptive_bandwidth=False)
+    with_prior = WeightedKDE1D(s, -5, 5, use_prior=True, adaptive_bandwidth=False, prior_weight=1.0)
+    assert with_prior.logpdf(far) > no_prior.logpdf(far)
+
+
+def test_adaptive_bw_gives_narrow_kernel_in_dense_cluster():
+    """Адаптивная ширина даёт более узкое ядро в плотной зоне, чем фиксированная (Сильверман)."""
+    s = np.array([0.00, 0.02, 0.04, 4.5])
+    adaptive = WeightedKDE1D(s, -5, 5, use_prior=False, adaptive_bandwidth=True)
+    fixed = WeightedKDE1D(s, -5, 5, use_prior=False, adaptive_bandwidth=False)
+    assert adaptive.bws.min() < fixed.bws.min()
+
+
+def test_base_modification_beats_naive_kde_on_sphere():
+    """Моя база (prior+адаптивная ширина) точнее «наивного» KDE (оба выключены) на Sphere."""
+    b = BENCHMARKS["Sphere"]
+    full, naive = [], []
+    for s in range(6):
+        full.append(min(TPE(bounds=b.bounds, seed=s).optimize(_obj(b), 80)["y_history"]))
+        naive.append(min(TPE(bounds=b.bounds, seed=s, use_prior=False,
+                             adaptive_bandwidth=False).optimize(_obj(b), 80)["y_history"]))
+    assert np.mean(full) < np.mean(naive)
+
+
 def test_refine_reduces_convex_objective():
     # Локальный градиентный refine должен снижать выпуклую функцию (Sphere) от стартовой точки.
     import numpy as np

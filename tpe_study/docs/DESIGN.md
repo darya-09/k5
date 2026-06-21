@@ -136,11 +136,19 @@ fin_5), используя оракул ∇f, без доп. оценок object
 - 2D и умеренный один уровень шума на функцию; для статьи стоит добавить sensitivity по σ и размерности.
 - GP используется только для переранжирования кандидатов (не полноценный BO).
 
+## 8b. Моя модификация базы TPE и её ablation
+База TPE здесь — не «ванильный» сэмплер: в оценщик плотности добавлены **prior-компонента**
+(`use_prior`) и **адаптивная ширина ядра** (`adaptive_bandwidth`). Оба — флаги класса `TPE`
+(дефолт `True`), поэтому модификация **ablat-able**: `ablation_base.py` отключает их по одному и
+оба сразу и сравнивает качество парным Уилкоксоном. Полный разбор (входные данные → суть →
+доказательства) — `docs/MODIFICATION_BASE_TPE.md`; таблицы — `results/tables/ablation_base_tpe.csv`.
+
 ## 9. Как запустить
 ```bash
 cd tpe_study
 PYTHONHASHSEED=0 python run.py                # полный прогон (configs/default.json)
 PYTHONHASHSEED=0 python run.py --quick        # быстрая проверка (мало seeds)
+PYTHONHASHSEED=0 python ablation_base.py      # ablation моей модификации базы (prior + ширина)
 ```
 Результаты появятся в `results/tables/*.csv` и `results/figures/*.png`,
 сводка с числами — в `docs/RESULTS.md`.

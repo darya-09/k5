@@ -147,7 +147,7 @@ def results_file(d, summ, sig, rn, rob, abl, cfg):
     L.append("- **Систематические стат-тесты:** парный Уилкоксон + Холм + робастность (4 теста × 3 поправки). "
              "В оригиналах — только частично в fin_5.")
     L.append("- **Оценка всегда по raw clean**, парный шум по (функция, seed), классификация black-box/white-box.")
-    L.append("- **Воспроизводимость:** PYTHONHASHSEED=0, фикс. seeds, детерминированный f_max, 23 теста pytest; seeds 30→50.")
+    L.append("- **Воспроизводимость:** PYTHONHASHSEED=0, фикс. seeds, детерминированный f_max, 26 тестов pytest; seeds 30→50.")
     L.append("- **Сохранено 1-в-1:** функции и их градиенты, 4 формы веса и формула w=clip(1+0.2·z,0.8,1.2), "
              "нормализация цели, гиперпараметры (n_init=10, gamma=0.2, n_candidates=24, max_evals=100).")
     (ROOT / "docs" / "FACTS_RESULTS.md").write_text("\n".join(L))
@@ -221,6 +221,26 @@ def conclusions_file(d, sig, ps, rn, rob, abl, cfg):
     L.append(f"- Результаты raw и norm СОВПАДАЮТ точно (8/8 ячеек) для: {', '.join('`'+a+'`' for a in sorted(same))}.")
     L.append(f"- Результаты raw и norm РАЗЛИЧАЮТСЯ (0/8 совпадений) для: {', '.join('`'+a+'`' for a in sorted(diff))}.")
     L.append("")
+    abl_base_path = T / "ablation_base_tpe.csv"
+    if abl_base_path.exists():
+        ab = pd.read_csv(abl_base_path)
+        g = ab.groupby("lesion")
+        sig_cnt = g["significant_worse"].sum().to_dict()
+        med = g["lesion_worse_by_%"].median().round(0).to_dict()
+        n_cells = int(g.size().iloc[0])
+        L.append("## Факты по МОЕЙ модификации базы TPE (prior + адаптивная ширина)")
+        L.append(f"Ablation (`ablation_base.py`, {n_cells} ячеек, парный Уилкоксон + Холм): "
+                 "отключаем компоненты базового сэмплера и смотрим рост final_dist_y.")
+        L.append(f"- Без адаптивной ширины (`fixed_bw`): значимо хуже в "
+                 f"{int(sig_cnt.get('fixed_bw',0))}/{n_cells} ячеек; медиана ухудшения {med.get('fixed_bw')}%.")
+        L.append(f"- Без обоих компонентов (`naive_kde`): значимо хуже в "
+                 f"{int(sig_cnt.get('naive_kde',0))}/{n_cells}; медиана {med.get('naive_kde')}%.")
+        L.append(f"- Без prior (`no_prior`): значимо хуже в "
+                 f"{int(sig_cnt.get('no_prior',0))}/{n_cells}; медиана {med.get('no_prior')}% "
+                 "(вклад стабильный по направлению, но по отдельности не значим).")
+        L.append("- Вывод: адаптивная ширина — главный драйвер точности; prior яснее всего в комбинации. "
+                 "Подробно — `docs/MODIFICATION_BASE_TPE.md`.")
+        L.append("")
     L.append("## Что НЕ проверялось (границы применимости фактов)")
     L.append("- Размерность только 2D; один уровень шума на функцию; градиент точный (не зашумлённый).")
     L.append("- GP используется только для переранжирования кандидатов.")

@@ -48,7 +48,8 @@ class WeightedKDE1D:
     """
     def __init__(self, samples: Array, lo: float, hi: float,
                  weights: Optional[Array] = None, min_bw_frac: float = 1e-2,
-                 prior_weight: float = 1.0):
+                 prior_weight: float = 1.0, use_prior: bool = True,
+                 adaptive_bandwidth: bool = True):
         samples = np.asarray(samples, dtype=float).ravel()
         self.lo, self.hi = float(lo), float(hi)
         span = max(hi - lo, 1e-12)
@@ -59,26 +60,42 @@ class WeightedKDE1D:
         else:
             w = np.clip(np.asarray(weights, dtype=float).ravel(), 1e-12, np.inf)
 
-        # Компоненты смеси = наблюдения + prior (широкий гауссиан в центре области).
+        # Компоненты смеси = наблюдения [+ prior]. Prior — широкий гауссиан в центре области.
+        # При n==0 prior обязателен (иначе плотность пустая) — это страховка, не основной путь.
         mid = 0.5 * (lo + hi)
-        self.centers = np.append(samples, mid)
-        comp_w = np.append(w, prior_weight)
+        has_prior = use_prior or n == 0
+        if has_prior:
+            self.centers = np.append(samples, mid)
+            comp_w = np.append(w, prior_weight)
+        else:
+            self.centers = samples.copy()
+            comp_w = w.copy()
         self.weights = comp_w / comp_w.sum()
+        self.n_obs, self.has_prior = n, has_prior
+        k = self.centers.size
 
-        # АДАПТИВНАЯ ширина ядра (Bergstra "magic clip"): для каждого центра ширина =
-        # max(расстояние до левого, до правого соседа) в отсортированном ряду центров.
-        # Это даёт узкие ядра в плотных (хороших) областях и широкие в разреженных -> спуск.
-        order = np.argsort(self.centers)
-        c = self.centers[order]
-        k = c.size
-        sig = np.empty(k)
-        for i in range(k):
-            left = c[i] - c[i - 1] if i > 0 else c[i] - lo
-            right = c[i + 1] - c[i] if i < k - 1 else hi - c[i]
-            sig[i] = max(left, right)
-        bws = np.empty(k)
-        bws[order] = sig
-        bws[n] = span                                  # prior-компонента всегда широкая
+        if adaptive_bandwidth:
+            # АДАПТИВНАЯ ширина ядра (Bergstra "magic clip"): для каждого центра ширина =
+            # max(расстояние до левого, до правого соседа) в отсортированном ряду центров.
+            # Узкие ядра в плотных (хороших) областях, широкие в разреженных -> спуск.
+            order = np.argsort(self.centers)
+            c = self.centers[order]
+            sig = np.empty(k)
+            for i in range(k):
+                left = c[i] - c[i - 1] if i > 0 else c[i] - lo
+                right = c[i + 1] - c[i] if i < k - 1 else hi - c[i]
+                sig[i] = max(left, right)
+            bws = np.empty(k)
+            bws[order] = sig
+        else:
+            # НЕадаптивная ширина (правило Сильвермана по наблюдениям) — одинаковая для всех ядер.
+            if n > 1:
+                h = 1.06 * float(np.std(samples)) * n ** (-1.0 / 5.0)
+            else:
+                h = span
+            bws = np.full(k, h if h > 0 else span)
+        if has_prior:
+            bws[n] = span                                  # prior-компонента всегда широкая
         self.bws = np.clip(bws, min_bw_frac * span, span)
         self.bw = float(np.median(self.bws[:n])) if n else span   # для справки
         # лог-веса с полом, чтобы не ловить log(0) при нулевом весе компоненты
@@ -174,6 +191,14 @@ class TPE:
     n_candidates: int = 24             # кандидатов на одну итерацию (n_ei_candidates)
     min_bw_frac: float = 1e-2
     seed: Optional[int] = None
+    # --- база KDE (моя переработка сэмплера; дефолты = основной вариант) ---
+    # use_prior: добавлять широкую prior-компоненту в KDE (consider_prior). Без неё «хорошая»
+    #   плотность схлопывается в моду -> TPE теряет исследование и застревает.
+    # adaptive_bandwidth: ширина ядра по соседям ("magic clip") вместо фиксированной (Сильверман).
+    #   Узкие ядра в плотных зонах -> корректный спуск; широкие в разреженных -> исследование.
+    # Эти два флага делают мою модификацию базы ABLAT-ABLE (см. ablation_base.py).
+    use_prior: bool = True
+    adaptive_bandwidth: bool = True
     # --- флаги-модификации (по одному фактору) ---
     # cand_weight_shape: форма градиентного веса w(x), домножающего АКВИЗИЦИЮ КАНДИДАТА
     #   (как в repo-TPE/fin_4: pi кандидата *= w(x_cand)). Требует grad_fn (оракул градиента).
@@ -300,6 +325,7 @@ class TPE:
                 samples=np.array([self.history_x[i][d] for i in idx]),
                 lo=self.bounds[d][0], hi=self.bounds[d][1],
                 weights=weights, min_bw_frac=self.min_bw_frac,
+                use_prior=self.use_prior, adaptive_bandwidth=self.adaptive_bandwidth,
             )
             for d in range(self.dim)
         ]
